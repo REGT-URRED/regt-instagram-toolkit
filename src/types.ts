@@ -37,6 +37,7 @@ export interface CliOptions {
   modes: CleanupMode[];
   blockAccounts: boolean;
   accountsFile: string;
+  hybrid: boolean;
   range: DateRange;
   batchSize: NumberRange;
   clickDelay: NumberRange;

@@ -11,6 +11,7 @@ interface RawArguments {
   comments?: boolean;
   blockAccounts: boolean;
   accountsFile: string;
+  hybrid: boolean;
   range?: string;
   from?: string;
   to?: string;
@@ -100,6 +101,7 @@ function buildCliOptions(rootDirectory: string, argv: RawArguments): CliOptions 
     modes: buildModes(argv),
     blockAccounts: argv.blockAccounts,
     accountsFile: path.resolve(argv.accountsFile),
+    hybrid: argv.hybrid,
     range: parseRange(argv.range, argv.from, argv.to),
     batchSize: parseIntegerRange(
       argv.batchSize,
@@ -178,6 +180,12 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
       type: 'boolean',
       default: false,
       describe: 'Block every Instagram account listed in the accounts file.',
+    })
+    .option('hybrid', {
+      type: 'boolean',
+      default: false,
+      describe:
+        'Run the hybrid prototype: accessibility capabilities, adaptive pacing, ledgers and ban guard.',
     })
     .option('accounts-file', {
       type: 'string',
@@ -304,12 +312,15 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     })
     .strict()
     .check((args) => {
-      const selectedModes = [args.likes, args.comments, args['blockAccounts']].filter(
-        Boolean,
-      ).length;
+      const selectedModes = [
+        args.likes,
+        args.comments,
+        args['blockAccounts'],
+        args['hybrid'],
+      ].filter(Boolean).length;
 
       if (selectedModes === 0) {
-        throw new Error('Use one flag: --likes, --comments or --block-accounts.');
+        throw new Error('Use one flag: --likes, --comments, --block-accounts or --hybrid.');
       }
 
       if (selectedModes > 1) {

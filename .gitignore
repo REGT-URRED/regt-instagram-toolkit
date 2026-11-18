@@ -42,6 +42,7 @@ node_modules/
 jspm_packages/
 .chrome-profile/
 .chrome-profiles/
+.state/
 .cache/puppeteer/
 
 # Snowpack dependency directory (https://snowpack.dev/)

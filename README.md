@@ -109,6 +109,23 @@ node ./dist/cli.js --comments --translations ./translations/es.json
 
 Archivos disponibles: `translations/en.json`, `translations/es.json`, `translations/fr.json`.
 
+## Prototipo híbrido (medición)
+
+Motor experimental que combina varias defensas y sirve para medir rendimiento con un lote:
+
+```sh
+node ./dist/cli.js --hybrid --limit 20 --dry-run   # solo selecciona
+node ./dist/cli.js --hybrid --limit 20             # borra el lote
+```
+
+- **Capacidades por accesibilidad:** resuelve `Seleccionar`/`Ya no me gusta` por rol y nombre accesible, no por texto traducido (`capabilities.json`). Si falla, cae al clic por etiquetas.
+- **Rate governor AIMD:** sube el ritmo con éxitos y lo reduce al doble con señales de bloqueo, con jitter.
+- **Ban guard:** cuenta señales (HTTP 429, avisos de la UI) en una ventana; pausa y, al superar el umbral, aborta para proteger la cuenta.
+- **Ledger idempotente:** `.state/ledger.jsonl` guarda IDs estables ya procesados; reiniciar no repite trabajo.
+- **Grabador de mutaciones:** `.state/mutations.jsonl` registra lo que hace la web (sin cookies ni CSRF) para construir el futuro replay de API.
+
+`.state/` y los perfiles de navegador quedan fuera de git.
+
 ## Aviso
 
 - Usa solo tu propia cuenta.

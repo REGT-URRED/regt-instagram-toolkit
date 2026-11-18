@@ -8,11 +8,13 @@ import type { Browser, Page } from 'puppeteer';
 import { launchBrowser, type BrowserSessionOptions } from './browser/launchBrowser.js';
 import { waitForDomReady, waitForPageIdle } from './browser/waits.js';
 import { parseCliOptions } from './cli/parseCliOptions.js';
+import { loadCapabilities } from './core/capabilities.js';
 import { blockAccounts } from './instagram/block/blockAccounts.js';
 import { cleanupHistory } from './instagram/cleanup.js';
 import { applyDateFilter } from './instagram/dateFilter.js';
 import { waitForInstagramLogin } from './instagram/session.js';
 import { buildTarget } from './instagram/targets.js';
+import { runHybridBatch } from './prototype/hybridBatch.js';
 import { getTranslationValues, loadTranslations } from './translations/loadTranslations.js';
 import type {
   BlockAccountEntry,
@@ -325,7 +327,18 @@ async function main(): Promise<void> {
   try {
     let keepBrowserOpen = true;
 
-    if (options.blockAccounts) {
+    if (options.hybrid) {
+      await waitForInstagramLogin(page, options.loginTimeout);
+      const capabilities = loadCapabilities(path.join(rootDirectory, 'capabilities.json'));
+      const result = await runHybridBatch(page, translations, capabilities, {
+        limit: options.limit ?? 20,
+        dryRun: options.dryRun,
+        ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
+        mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
+      });
+
+      logger.info(`Hybrid result: ${JSON.stringify(result)}`);
+    } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);
       const accounts = loadBlockAccounts(options.accountsFile);
       const result = await blockAccounts(page, accounts, translations, {
