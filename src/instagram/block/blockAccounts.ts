@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Page } from 'puppeteer';
 import { waitForDomReady, waitForPageIdle } from '../../browser/waits.js';
@@ -28,10 +30,15 @@ export async function blockAccounts(
     alreadyBlocked: 0,
     notFound: 0,
     failed: 0,
+    wouldBlock: 0,
+    skipped: 0,
   };
   const optionsLabels = getTranslationValues(translations, ['options']);
   const blockLabels = getTranslationValues(translations, ['block']);
   const unblockLabels = getTranslationValues(translations, ['unblock']);
+  const ledger = loadBlockLedger(options.ledgerPath);
+  const failures: Array<{ username: string; error: string }> = [];
+  let processed = 0;
 
   for (const account of accounts) {
     const username = account.username.replace(/^@/, '').trim();
@@ -39,7 +46,19 @@ export async function blockAccounts(
       continue;
     }
 
-    logger.info(`[block] @${username}`);
+    if (options.limit && processed >= options.limit) {
+      logger.info(`[block] Limit reached: ${options.limit}`);
+      break;
+    }
+
+    const previous = ledger.get(username);
+    if (!options.dryRun && (previous === 'blocked' || previous === 'alreadyBlocked')) {
+      result.skipped += 1;
+      continue;
+    }
+
+    processed += 1;
+    logger.info(`[block] @${username} (${processed}${options.limit ? `/${options.limit}` : ''})`);
     try {
       await page.goto(`https://www.instagram.com/${encodeURIComponent(username)}/`, {
         waitUntil: 'domcontentloaded',
@@ -48,15 +67,35 @@ export async function blockAccounts(
       await waitForDomReady(page);
       await waitForPageIdle(page, 2_500, 500);
 
+      const throttled = await page.evaluate(() => {
+        const text = (document.body.innerText || '').toLowerCase();
+        return (
+          text.includes('try again later') ||
+          text.includes('intenta de nuevo') ||
+          text.includes('temporarily blocked') ||
+          text.includes('accion bloqueada')
+        );
+      });
+      if (throttled) {
+        throw new Error('Instagram asked to try again later; stopping to protect the account.');
+      }
+
       const state = await page.evaluate(profileStateProbe);
       if (state.notFound) {
         result.notFound += 1;
+        recordBlock(ledger, options.ledgerPath, username, 'notFound');
         logger.warn(`[block] @${username} was not found. Skipping.`);
         continue;
       }
       if (state.blocked) {
         result.alreadyBlocked += 1;
+        recordBlock(ledger, options.ledgerPath, username, 'alreadyBlocked');
         logger.info(`[block] @${username} was already blocked. Skipping.`);
+        continue;
+      }
+      if (options.dryRun) {
+        result.wouldBlock += 1;
+        logger.info(`[block] @${username} would be blocked (verification mode).`);
         continue;
       }
 
@@ -94,18 +133,69 @@ export async function blockAccounts(
 
       await waitForBlockedState(page, unblockLabels);
       result.blocked += 1;
+      recordBlock(ledger, options.ledgerPath, username, 'blocked');
       logger.info(`[block] @${username} blocked.`);
     } catch (error) {
       result.failed += 1;
-      logger.error(
-        `[block] @${username} failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ username, error: message });
+      recordBlock(ledger, options.ledgerPath, username, 'failed');
+      logger.error(`[block] @${username} failed: ${message}`);
+      if (message.includes('try again later')) {
+        logger.warn('[block] Stopping the run after a throttle signal.');
+        break;
+      }
     }
 
     await randomDelay(options.accountDelay);
   }
 
+  if (options.failuresPath) {
+    fs.mkdirSync(path.dirname(options.failuresPath), { recursive: true });
+    fs.writeFileSync(options.failuresPath, `${JSON.stringify(failures, null, 2)}\n`);
+  }
+
   return result;
+}
+
+function loadBlockLedger(filePath?: string): Map<string, string> {
+  const ledger = new Map<string, string>();
+  if (!filePath || !fs.existsSync(filePath)) {
+    return ledger;
+  }
+
+  for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+    if (!line.trim()) {
+      continue;
+    }
+    try {
+      const entry = JSON.parse(line) as { username?: string; status?: string };
+      if (entry.username && entry.status) {
+        ledger.set(entry.username, entry.status);
+      }
+    } catch {
+      // ignore malformed lines
+    }
+  }
+
+  return ledger;
+}
+
+function recordBlock(
+  ledger: Map<string, string>,
+  filePath: string | undefined,
+  username: string,
+  status: string,
+): void {
+  ledger.set(username, status);
+  if (!filePath) {
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.appendFileSync(
+    filePath,
+    `${JSON.stringify({ username, status, at: new Date().toISOString() })}\n`,
+  );
 }
 
 async function waitForBlockedState(page: Page, unblockLabels: string[]): Promise<void> {

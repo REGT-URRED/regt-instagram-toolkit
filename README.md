@@ -45,7 +45,15 @@ npm run comments
 npm run block
 ```
 
-El programa lee `accounts.json`, abre cada perfil y pulsa `Opciones` → `Bloquear` → `Bloquear`. Si una cuenta ya está bloqueada, no existe o falla, lo reporta y sigue con la siguiente.
+El programa lee `accounts.json` (244 perfiles en la lista consolidada), abre cada perfil y pulsa `Opciones` → `Bloquear` → `Bloquear`. Si una cuenta ya está bloqueada, no existe o falla, lo reporta y sigue con la siguiente.
+
+Flags de bloqueo:
+
+- `--block-limit N`: procesa como máximo N cuentas en la corrida.
+- `--block-dry-run`: solo verifica si ya están bloqueadas; no bloquea nada (medido: ~3,4 s/cuenta).
+- `--block-delay min:max`: espera aleatoria entre cuentas (por defecto `1500:3000` ms).
+- `.state/block-ledger.jsonl`: reanuda sin repetir cuentas ya bloqueadas/verificadas.
+- `.state/block-failures.json`: lista de fallos con su error para reintentar.
 
 ## Lista comunitaria de cuentas (`accounts.json`)
 
@@ -66,10 +74,11 @@ También se acepta un array simple:
 
 **Cómo aportar cuentas:** añade el usuario a `accounts.json` y abre un Pull Request con el nombre y una nota breve (por ejemplo `ads`, `spam`, `marketplace`). Cuantas más cuentas aporte la comunidad, menos anuncios aparecerán en los feeds de todos.
 
-Usa una lista propia con `--accounts-file`:
+Usa una lista propia con `--accounts-file` (`.json` o `.txt`, un usuario por línea):
 
 ```sh
 node ./dist/cli.js --block-accounts --accounts-file ./mi-lista.json
+node ./dist/cli.js --block-accounts --accounts-file ./mi-lista.txt --block-limit 50
 ```
 
 ## Navegador y sesión

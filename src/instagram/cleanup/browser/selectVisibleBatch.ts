@@ -931,11 +931,15 @@ export async function selectBatchInPage({
     public async run(): Promise<FastSelectResult> {
       let emptyRounds = 0;
       let rounds = 0;
+      const selectionDeadline = Date.now() + 30_000;
       let lastBatch = 0;
       let lastChecked = 0;
       const history: string[] = [];
 
       while (this.clickedKeys.length < limit) {
+        if (rounds >= 8 || Date.now() > selectionDeadline) {
+          break;
+        }
         const elements = this.scan().slice(0, limit - this.clickedKeys.length);
 
         if (elements.length === 0) {

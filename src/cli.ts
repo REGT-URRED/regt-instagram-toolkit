@@ -397,12 +397,16 @@ async function main(): Promise<void> {
       await waitForInstagramLogin(page, options.loginTimeout);
       const accounts = loadBlockAccounts(options.accountsFile);
       const result = await blockAccounts(page, accounts, translations, {
-        accountDelay: options.batchDelay,
+        accountDelay: options.blockDelay,
         confirmDelay: options.confirmDelay,
+        limit: options.blockLimit,
+        dryRun: options.blockDryRun,
+        ledgerPath: path.join(rootDirectory, '.state/block-ledger.jsonl'),
+        failuresPath: path.join(rootDirectory, '.state/block-failures.json'),
       });
 
       logger.info(
-        `Block summary: ${result.blocked} blocked, ${result.alreadyBlocked} already blocked, ${result.notFound} not found, ${result.failed} failed.`,
+        `Block summary: ${result.blocked} blocked, ${result.alreadyBlocked} already blocked, ${result.wouldBlock} would block, ${result.skipped} skipped, ${result.notFound} not found, ${result.failed} failed.`,
       );
     } else {
       const jobs = createCleanupJobs(page, targets);

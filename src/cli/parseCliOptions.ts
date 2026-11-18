@@ -13,6 +13,9 @@ interface RawArguments {
   accountsFile: string;
   hybrid: boolean;
   hybridPasses: number;
+  blockLimit?: number;
+  blockDryRun: boolean;
+  blockDelay: string;
   range?: string;
   from?: string;
   to?: string;
@@ -104,6 +107,9 @@ function buildCliOptions(rootDirectory: string, argv: RawArguments): CliOptions 
     accountsFile: path.resolve(argv.accountsFile),
     hybrid: argv.hybrid,
     hybridPasses: argv.hybridPasses,
+    blockLimit: argv.blockLimit,
+    blockDryRun: argv.blockDryRun,
+    blockDelay: parseIntegerRange(argv.blockDelay, '--block-delay', 500, 60_000, true),
     range: parseRange(argv.range, argv.from, argv.to),
     batchSize: parseIntegerRange(
       argv.batchSize,
@@ -198,7 +204,21 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     .option('accounts-file', {
       type: 'string',
       default: './accounts.json',
-      describe: 'Path to the JSON list of accounts to block.',
+      describe: 'Path to the JSON or TXT list of accounts to block.',
+    })
+    .option('block-limit', {
+      type: 'number',
+      describe: 'Process at most this many accounts in the current run.',
+    })
+    .option('block-dry-run', {
+      type: 'boolean',
+      default: false,
+      describe: 'Only check whether each account is already blocked; do not block.',
+    })
+    .option('block-delay', {
+      type: 'string',
+      default: '1500:3000',
+      describe: 'Random wait between profile checks/blocks, e.g. 1500:3000 (ms).',
     })
     .option('range', {
       type: 'string',

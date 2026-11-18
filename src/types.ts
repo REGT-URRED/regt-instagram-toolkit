@@ -24,6 +24,10 @@ export interface BlockAccountEntry {
 export interface BlockAccountsOptions {
   accountDelay: NumberRange;
   confirmDelay: NumberRange;
+  limit: number | undefined;
+  dryRun?: boolean;
+  ledgerPath?: string;
+  failuresPath?: string;
 }
 
 export interface BlockAccountsResult {
@@ -31,6 +35,8 @@ export interface BlockAccountsResult {
   alreadyBlocked: number;
   notFound: number;
   failed: number;
+  wouldBlock: number;
+  skipped: number;
 }
 
 export interface CliOptions {
@@ -39,6 +45,9 @@ export interface CliOptions {
   accountsFile: string;
   hybrid: boolean;
   hybridPasses: number;
+  blockLimit: number | undefined;
+  blockDryRun: boolean;
+  blockDelay: NumberRange;
   range: DateRange;
   batchSize: NumberRange;
   clickDelay: NumberRange;
