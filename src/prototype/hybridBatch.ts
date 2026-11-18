@@ -130,6 +130,41 @@ export async function runHybridBatch(
   await waitForPageIdle(page, 3_000, 500);
 
   const isLikes = options.mode === 'likes';
+  // Instagram disables the toolbar at 99 selections ("Desmarcar algunos…"),
+  // so a batch never exceeds 95 even if the caller asks for more.
+  const batchLimit = Math.min(options.limit, 95);
+  const debugEnabled = process.env['HYBRID_DEBUG'] === '1';
+  const debugState = async (phase: string): Promise<void> => {
+    if (!debugEnabled) {
+      return;
+    }
+    const state = await page.evaluate(() => {
+      const isVisible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const labels = Array.from(
+        document.querySelectorAll('button,[role="button"],div,span'),
+      ).filter(
+        (element) =>
+          isVisible(element) && (element as HTMLElement).innerText.trim() === 'Eliminar',
+      );
+      return {
+        rows: document.querySelectorAll('[data-testid="post_collection_item"]').length,
+        checkboxes: document.querySelectorAll('[data-testid="bulk_action_checkbox"]').length,
+        checked: document.querySelectorAll(
+          '[data-testid="bulk_action_checkbox"] [aria-checked="true"],[data-testid="bulk_action_checkbox"] [aria-selected="true"]',
+        ).length,
+        eliminar: labels.map((element) => {
+          const rect = element.getBoundingClientRect();
+          return `${element.tagName}@${Math.round(rect.top)},${Math.round(rect.left)}`;
+        }),
+        dialogText: document.body.innerText.includes('¿Eliminar comentarios?'),
+        dialogs: document.querySelectorAll('[role="dialog"],[aria-modal="true"]').length,
+      };
+    });
+    logger.info(`[hybrid][debug] ${phase} ${JSON.stringify(state)}`);
+  };
   const selectLabels = getTranslationValues(translations, ['select']);
   const actionLabels = getTranslationValues(translations, isLikes ? ['unlike'] : ['delete']);
   const confirmLabels = getTranslationValues(
@@ -157,11 +192,11 @@ export async function runHybridBatch(
   await sleep(1_500);
 
   const ids: string[] = [];
+  const clickedIds: string[] = [];
   let clicked = 0;
-  let skipped = 0;
   let emptyAttempts = 0;
 
-  while (clicked < options.limit) {
+  while (clicked < batchLimit) {
     const target = await page.evaluate(collectNextVisibleBatchTarget, {
       checkboxSelector: getCheckboxCandidateSelector(),
       controlText: getTranslationValues(translations, ['select', 'unlike', 'delete']),
@@ -201,11 +236,8 @@ export async function runHybridBatch(
 
     ids.push(target.key);
 
-    if (ledger.has(target.key)) {
-      skipped += 1;
-      continue;
-    }
-
+    // The ledger is audit-only here: signatures can repeat and pending items may
+    // still be visible, so skipping by ledger key would leave work undone.
     const ok = await page.evaluate(clickSelectionTargetByKey, {
       checkboxSelector: getSelectableItemsSelector(),
       controlText: getTranslationValues(translations, ['select', 'unlike', 'delete']),
@@ -214,17 +246,19 @@ export async function runHybridBatch(
 
     if (ok) {
       clicked += 1;
+      clickedIds.push(target.key);
     }
 
     await respectBanGuard();
     await governor.wait();
   }
 
+  await debugState('selected');
+
   if (clicked === 0) {
     logger.warn('[hybrid] No selectable item was found.');
     return buildResult({
       clicked: 0,
-      skipped,
       startedAt,
       governor,
       guard,
@@ -238,7 +272,6 @@ export async function runHybridBatch(
     logger.info(`[hybrid] Dry run: ${clicked} item(s) selected, no deletion performed.`);
     return buildResult({
       clicked,
-      skipped,
       startedAt,
       governor,
       guard,
@@ -251,41 +284,60 @@ export async function runHybridBatch(
   await respectBanGuard();
 
   await governor.wait();
-  const acted =
-    (await invokeCapability(page, actionRule, 6_000)) ||
-    (await clickByLabels(page, actionLabels, {
-      timeout: 6_000,
-      preferLast: true,
-      debugName: 'Cleanup action',
-    }));
+  const actedByLabel = await clickByLabels(page, actionLabels, {
+    timeout: 6_000,
+    preferLast: true,
+    debugName: 'Cleanup action',
+  });
+  const acted = actedByLabel || (await invokeCapability(page, actionRule, 6_000));
+  if (debugEnabled) {
+    logger.info(`[hybrid][debug] action label=${actedByLabel} capability=${!actedByLabel}`);
+  }
   if (!acted) {
     throw new Error('The cleanup action control was not found.');
   }
+  await debugState('after-action');
 
-  await governor.wait();
-  const confirmed =
-    (await invokeCapability(page, confirmRule, 8_000)) ||
-    (await clickByLabels(page, confirmLabels, {
-      timeout: 8_000,
-      preferLast: true,
-      insideDialog: true,
-      debugName: 'Cleanup confirmation',
-    }));
-  if (!confirmed) {
-    throw new Error('The cleanup confirmation control was not found.');
-  }
-
-  const mutationDeadline = Date.now() + 6_000;
-  while (!mutationSeen && Date.now() < mutationDeadline) {
+  // Instagram sometimes deletes straight from the toolbar and sometimes opens a
+  // confirmation sheet; wait briefly for the direct mutation before confirming.
+  const directDeadline = Date.now() + 2_500;
+  while (!mutationSeen && Date.now() < directDeadline) {
     await sleep(200);
   }
 
   if (!mutationSeen) {
-    for (const id of ids.slice(0, clicked)) {
+    await sleep(600);
+    await governor.wait();
+    const confirmedByLabel = await clickByLabels(page, confirmLabels, {
+      timeout: 3_000,
+      preferLast: true,
+      insideDialog: true,
+      debugName: 'Cleanup confirmation',
+    });
+    const confirmed =
+      confirmedByLabel ||
+      (await invokeCapability(page, confirmRule, 3_000)) ||
+      (await clickDialogConfirm(page, confirmLabels));
+    if (debugEnabled) {
+      logger.info(`[hybrid][debug] confirm label=${confirmedByLabel} any=${confirmed}`);
+    }
+    await debugState('after-confirm');
+    if (!confirmed) {
+      throw new Error('The cleanup confirmation control was not found.');
+    }
+
+    const mutationDeadline = Date.now() + 6_000;
+    while (!mutationSeen && Date.now() < mutationDeadline) {
+      await sleep(200);
+    }
+  }
+
+  if (!mutationSeen) {
+    for (const id of clickedIds) {
       ledger.mark(id, 'failed');
     }
     throw new Error(
-      'No successful delete/unlike request was observed after confirmation. Nothing was marked as processed.',
+      'No successful delete/unlike request was observed. Nothing was marked as processed.',
     );
   }
 
@@ -317,21 +369,49 @@ export async function runHybridBatch(
     }
   }
 
-  for (const id of ids.slice(0, clicked)) {
-    ledger.mark(id, confirmed ? 'processed' : 'failed');
+  for (const id of clickedIds) {
+    ledger.mark(id, 'processed');
   }
-
-  if (confirmed) {
-    governor.recordSuccess();
-  }
+  governor.recordSuccess();
 
   logger.info(`[hybrid] Recorded ${ledger.size} stable id(s) in the ledger.`);
-  return buildResult({ clicked, skipped, startedAt, governor, guard, ledger, banSignals, options });
+  return buildResult({ clicked, startedAt, governor, guard, ledger, banSignals, options });
+}
+
+async function clickDialogConfirm(page: Page, labels: string[]): Promise<boolean> {
+  return page.evaluate((confirmLabels: string[]) => {
+    const normalized = confirmLabels.map((label) => label.trim().toLowerCase());
+    const visible = (element: Element): boolean => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const candidates = Array.from(
+      document.querySelectorAll('button,[role="button"],div,span'),
+    )
+      .filter(
+        (element) =>
+          visible(element) &&
+          normalized.includes((element as HTMLElement).innerText.trim().toLowerCase()),
+      )
+      .reverse();
+    const target =
+      candidates.find((element) => {
+        let current: HTMLElement | null = element as HTMLElement;
+        for (let depth = 0; current && depth < 10; depth += 1) {
+          if ((current.innerText || '').includes('?')) {
+            return true;
+          }
+          current = current.parentElement;
+        }
+        return false;
+      }) ?? candidates.at(-1);
+    (target as HTMLElement | undefined)?.click();
+    return Boolean(target);
+  }, labels);
 }
 
 function buildResult(args: {
   clicked: number;
-  skipped: number;
   startedAt: number;
   governor: RateGovernor;
   guard: BanGuard;
@@ -349,10 +429,6 @@ function buildResult(args: {
     governor: args.governor.snapshot(),
     dryRun: args.options.dryRun,
   };
-
-  if (args.skipped > 0) {
-    logger.info(`[hybrid] Skipped ${args.skipped} item(s) already in the ledger.`);
-  }
 
   logger.info(
     `[hybrid] processed=${result.processed} elapsed=${Math.round(
