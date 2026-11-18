@@ -49,6 +49,15 @@ export async function runHybridBatch(
   options: HybridBatchOptions,
 ): Promise<HybridBatchResult> {
   const startedAt = Date.now();
+  const timings: {
+    gotoMs?: number;
+    listWaitMs?: number;
+    selectModeMs?: number;
+    selectionMs?: number;
+    actionMs?: number;
+    confirmMs?: number;
+    mutationMs?: number;
+  } = {};
   const ledger = new Ledger(options.ledgerPath);
   ledger.load();
 
@@ -121,10 +130,24 @@ export async function runHybridBatch(
   logger.info(`[hybrid] Opening ${activityUrl}`);
   // The activity list virtualizes rows to the viewport; a taller window renders
   // more checkboxes and removes the per-item scroll round trips.
+  const gotoStartedAt = Date.now();
   await page.setViewport({ width: 1280, height: 1800 });
   await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await waitForDomReady(page);
   await waitForPageIdle(page, 3_000, 500);
+  timings.gotoMs = Date.now() - gotoStartedAt;
+
+  const listState = await waitForActivityList(page, 15_000);
+  timings.listWaitMs = listState.waitedMs;
+  if (listState.state === 'empty') {
+    logger.info('[hybrid] The activity list is empty; nothing left to do.');
+    return buildResult({ clicked: 0, startedAt, governor, guard, ledger, banSignals, options });
+  }
+  if (listState.state === 'timeout') {
+    throw new Error(
+      'The activity list stayed blank for 15s; stopping before retrying (Instagram may be throttling).',
+    );
+  }
 
   const isLikes = options.mode === 'likes';
   // Instagram disables the toolbar at 99 selections ("Desmarcar algunos…"),
@@ -175,7 +198,9 @@ export async function runHybridBatch(
     ? { ...capabilities.confirm, scope: 'dialog' as const, preferLast: true }
     : { role: 'button', names: confirmLabels, scope: 'dialog' as const, preferLast: true };
 
+  const selectStartedAt = Date.now();
   const selected = await activateSelectMode(page, selectLabels);
+  timings.selectModeMs = Date.now() - selectStartedAt;
   if (!selected) {
     throw new Error('The Select control did not enter selection mode.');
   }
@@ -215,9 +240,10 @@ export async function runHybridBatch(
       );
     }
   }
+  timings.selectionMs = Date.now() - fastStartedAt;
   if (debugEnabled) {
     logger.info(
-      `[hybrid][debug] fast ms=${Date.now() - fastStartedAt} rounds=${fastSelection.rounds} history=${fastSelection.history.join(',')}`,
+      `[hybrid][debug] fast ms=${timings.selectionMs} rounds=${fastSelection.rounds} history=${fastSelection.history.join(',')}`,
     );
   }
   const clickedIds = fastSelection.clickedKeys;
@@ -258,6 +284,7 @@ export async function runHybridBatch(
   await respectBanGuard();
 
   await governor.wait();
+  const actionStartedAt = Date.now();
   const actedByDom = await clickActionByDom(page, actionLabels);
   const actedByLabel = actedByDom
     ? false
@@ -268,6 +295,7 @@ export async function runHybridBatch(
       });
   const acted =
     actedByDom || actedByLabel || (await invokeCapability(page, actionRule, 6_000));
+  timings.actionMs = Date.now() - actionStartedAt;
   if (debugEnabled) {
     logger.info(`[hybrid][debug] action label=${actedByLabel} capability=${!actedByLabel}`);
   }
@@ -315,9 +343,11 @@ export async function runHybridBatch(
     await sleep(200);
   }
 
+  const mutationStartedAt = Date.now();
   if (!mutationSeen) {
     await sleep(600);
     await governor.wait();
+    const confirmStartedAt = Date.now();
     const confirmedByLabel = await clickByLabels(page, confirmLabels, {
       timeout: 3_000,
       preferLast: true,
@@ -328,6 +358,7 @@ export async function runHybridBatch(
       confirmedByLabel ||
       (await invokeCapability(page, confirmRule, 3_000)) ||
       (await clickDialogConfirm(page, confirmLabels));
+    timings.confirmMs = Date.now() - confirmStartedAt;
     if (debugEnabled) {
       logger.info(`[hybrid][debug] confirm label=${confirmedByLabel} any=${confirmed}`);
     }
@@ -342,6 +373,7 @@ export async function runHybridBatch(
     }
   }
 
+  timings.mutationMs = Date.now() - mutationStartedAt;
   if (!mutationSeen) {
     for (const id of clickedIds) {
       ledger.mark(id, 'failed');
@@ -384,8 +416,43 @@ export async function runHybridBatch(
   }
   governor.recordSuccess();
 
+  logger.info(
+    `[hybrid] timings goto=${timings.gotoMs ?? 0}ms list=${timings.listWaitMs ?? 0}ms select=${timings.selectModeMs ?? 0}ms selection=${timings.selectionMs ?? 0}ms action=${timings.actionMs ?? 0}ms confirm=${timings.confirmMs ?? 0}ms mutation=${timings.mutationMs ?? 0}ms`,
+  );
   logger.info(`[hybrid] Recorded ${ledger.size} stable id(s) in the ledger.`);
   return buildResult({ clicked, startedAt, governor, guard, ledger, banSignals, options });
+}
+
+async function waitForActivityList(
+  page: Page,
+  timeoutMs: number,
+): Promise<{ state: 'ready' | 'empty' | 'timeout'; waitedMs: number }> {
+  const startedAt = Date.now();
+
+  for (;;) {
+    const state = await page.evaluate(() => {
+      const rows = document.querySelectorAll('[data-testid="post_collection_item"]').length;
+      const text = (document.body.innerText || '').toLowerCase();
+      const empty =
+        text.includes('no hay comentarios') ||
+        text.includes('no comments') ||
+        text.includes('aún no hay') ||
+        text.includes('nothing here') ||
+        text.includes('sin comentarios');
+      return { rows, empty };
+    });
+
+    if (state.rows > 0) {
+      return { state: 'ready', waitedMs: Date.now() - startedAt };
+    }
+    if (state.empty) {
+      return { state: 'empty', waitedMs: Date.now() - startedAt };
+    }
+    if (Date.now() - startedAt >= timeoutMs) {
+      return { state: 'timeout', waitedMs: Date.now() - startedAt };
+    }
+    await sleep(1_000);
+  }
 }
 
 async function activateSelectMode(page: Page, labels: string[]): Promise<boolean> {

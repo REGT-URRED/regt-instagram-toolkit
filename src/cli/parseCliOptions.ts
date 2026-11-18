@@ -192,7 +192,8 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     .option('hybrid-passes', {
       type: 'number',
       default: 1,
-      describe: 'How many batches the hybrid runs inside one browser session.',
+      describe:
+        'Max batches inside one browser session. 0 runs until the list is empty, growing the batch on success and backing off on failure.',
     })
     .option('accounts-file', {
       type: 'string',

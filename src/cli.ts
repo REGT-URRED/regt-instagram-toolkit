@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Browser, Page } from 'puppeteer';
 import { launchBrowser, type BrowserSessionOptions } from './browser/launchBrowser.js';
 import { waitForDomReady, waitForPageIdle } from './browser/waits.js';
@@ -267,7 +268,16 @@ function delay(durationMs: number): Promise<void> {
 }
 
 function loadBlockAccounts(filePath: string): BlockAccountEntry[] {
-  const parsed: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const raw = fs.readFileSync(filePath, 'utf8');
+  if (filePath.toLowerCase().endsWith('.txt')) {
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.split('#')[0]?.trim() ?? '')
+      .filter(Boolean)
+      .map((username) => ({ username }));
+  }
+
+  const parsed: unknown = JSON.parse(raw);
   let list: unknown[];
 
   if (Array.isArray(parsed)) {
@@ -330,31 +340,58 @@ async function main(): Promise<void> {
     if (options.hybrid) {
       await waitForInstagramLogin(page, options.loginTimeout);
       const capabilities = loadCapabilities(path.join(rootDirectory, 'capabilities.json'));
-      const passes = Math.max(1, Math.min(20, options.hybridPasses));
+      const maxPasses = Math.max(0, Math.min(50, options.hybridPasses));
+      const maxBatch = Math.min(options.limit ?? 95, 95);
+      const passLimit = maxPasses === 0 ? 50 : maxPasses;
+      let batchSize = Math.min(maxBatch, 20);
+      let growthCeiling = maxBatch;
       let processed = 0;
       let lastResult: Awaited<ReturnType<typeof runHybridBatch>> | null = null;
+      let pass = 0;
+      let failures = 0;
 
-      for (let pass = 1; pass <= passes; pass += 1) {
-        if (pass > 1) {
-          logger.info(`[hybrid] Pass ${pass}/${passes}`);
-        }
-        const result = await runHybridBatch(page, translations, capabilities, {
-          mode: options.modes.includes('comments') ? 'comments' : 'likes',
-          limit: options.limit ?? 20,
-          dryRun: options.dryRun,
-          ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
-          mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
-        });
-        processed += result.processed;
-        lastResult = result;
-        logger.info(`Hybrid pass ${pass}: ${JSON.stringify(result)}`);
-        if (result.processed === 0) {
-          break;
+      while (pass < passLimit) {
+        pass += 1;
+        try {
+          const result = await runHybridBatch(page, translations, capabilities, {
+            mode: options.modes.includes('comments') ? 'comments' : 'likes',
+            limit: batchSize,
+            dryRun: options.dryRun,
+            ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
+            mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
+          });
+          processed += result.processed;
+          lastResult = result;
+          logger.info(`Hybrid pass ${pass}: batch=${batchSize} ${JSON.stringify(result)}`);
+          failures = 0;
+          if (options.dryRun || result.processed === 0) {
+            break;
+          }
+          if (result.processed >= batchSize && batchSize < maxBatch) {
+            const grown = Math.min(
+              growthCeiling,
+              Math.max(batchSize + 20, Math.floor(batchSize * 1.5)),
+            );
+            logger.info(`[hybrid] Growing batch ${batchSize} -> ${grown}`);
+            batchSize = grown;
+          }
+        } catch (error) {
+          failures += 1;
+          if (failures >= 3) {
+            throw error;
+          }
+          growthCeiling = Math.min(growthCeiling, Math.max(20, batchSize - 1));
+          batchSize = Math.max(20, Math.floor(batchSize / 2));
+          const cooldown = 8_000 * failures;
+          logger.warn(
+            `[hybrid] Pass failed; growth ceiling ${growthCeiling}, backing off to batch ${batchSize} in ${cooldown / 1000}s (${String(error)})`,
+          );
+          await sleep(cooldown);
         }
       }
 
       logger.info(
-        `Hybrid result: processed=${processed} across ${passes} pass(es); last=${JSON.stringify(lastResult)}`,
+        `Hybrid result: processed=${processed} across ${pass} pass(es), final batch=${batchSize}; last=${JSON.stringify(lastResult)}`,
       );
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);

@@ -117,13 +117,18 @@ Motor experimental que combina varias defensas y sirve para medir rendimiento co
 node ./dist/cli.js --hybrid --limit 20 --dry-run   # solo selecciona
 node ./dist/cli.js --hybrid --limit 20             # borra el lote
 node ./dist/cli.js --hybrid --limit 20 --hybrid-passes 5  # 5 lotes en una sola sesión
+node ./dist/cli.js --hybrid --limit 95 --hybrid-passes 0  # drena: crece el lote y retrocede si falla
 ```
 
 - **Capacidades por accesibilidad:** resuelve `Seleccionar`/`Ya no me gusta` por rol y nombre accesible, no por texto traducido (`capabilities.json`). Si falla, cae al clic por etiquetas.
 - **Rate governor AIMD:** sube el ritmo con éxitos y lo reduce al doble con señales de bloqueo, con jitter.
 - **Ban guard:** cuenta señales (HTTP 429, avisos de la UI) en una ventana; pausa y, al superar el umbral, aborta para proteger la cuenta.
 - **Ledger idempotente:** `.state/ledger.jsonl` guarda IDs estables ya procesados; reiniciar no repite trabajo.
-- **Sesión reutilizada:** `--hybrid-passes N` ejecuta N lotes dentro del mismo navegador; solo recarga la página entre lotes en vez de relanzar Brave (40 ítems en 24 s frente a ~40 s en dos lanzamientos).
+- **Sesión reutilizada:** `--hybrid-passes N` ejecuta N lotes dentro del mismo navegador; solo recarga la página entre lotes en vez de relanzar Brave (40 ítems en 24 s frente a ~40 s en dos lanzamientos). `--hybrid-passes 0` drena hasta vaciar la lista.
+- **Lote adaptativo:** empieza en 20, crece al acertar (20→30→45→67→95) y aprende del fallo: si un tamaño falla, baja el techo para no volver a intentarlo y retrocede con pausa (8 s, 16 s). Tres fallos seguidos abortan.
+- **Tiempos por fase:** cada lote registra `goto`, `list` (espera de la lista), `select`, `selection`, `action`, `confirm` y `mutation` en ms.
+- **Lista negra/ vacía:** si la actividad queda en blanco, espera hasta 15 s con sondeo; si hay estado vacío termina limpio y si sigue en blanco aborta con mensaje claro.
+- **Cuentas a bloquear:** acepta `.json` (`accounts`) o `.txt` (un usuario por línea, `#` para comentarios).
 - **Grabador de mutaciones:** `.state/mutations.jsonl` registra lo que hace la web (sin cookies ni CSRF). El replay de API se evaluó y quedó bloqueado: el `comments_screen` de Bloks trae `items_for_action` vacío y ninguna respuesta plana contiene los IDs; el cliente los arma en memoria.
 
 `.state/` y los perfiles de navegador quedan fuera de git.
