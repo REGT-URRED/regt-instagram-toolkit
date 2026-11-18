@@ -21,7 +21,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
-    "format:check": "prettier . --check"
+    "format:check": "prettier . --check",
+    "menu": "npm run build --silent && node ./dist/start.js"
   },
   "keywords": [
     "instagram",

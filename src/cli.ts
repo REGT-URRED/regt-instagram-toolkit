@@ -59,6 +59,7 @@ function logRunConfiguration(options: CliOptions): void {
 function buildBrowserSessionOptions(options: CliOptions): BrowserSessionOptions {
   return {
     rootDir: rootDirectory,
+    browser: options.browser,
     useSystemProfile: options.useSystemProfile,
     noSandbox: options.noSandbox,
     ...(options.profileDir !== undefined ? { profileDir: options.profileDir } : {}),
@@ -362,7 +363,12 @@ async function main(): Promise<void> {
           });
           processed += result.processed;
           lastResult = result;
-          logger.info(`Hybrid pass ${pass}: batch=${batchSize} ${JSON.stringify(result)}`);
+          logger.info(
+            `Lote ${pass}: ${result.processed} borrados · ${Math.round(
+              result.elapsedMs / 1000,
+            )} s · lote ${batchSize} · total ${processed}`,
+          );
+          logger.debug(`Hybrid pass raw ${JSON.stringify(result)}`);
           failures = 0;
           if (options.dryRun || result.processed === 0) {
             break;
@@ -372,7 +378,7 @@ async function main(): Promise<void> {
               growthCeiling,
               Math.max(batchSize + 20, Math.floor(batchSize * 1.5)),
             );
-            logger.info(`[hybrid] Growing batch ${batchSize} -> ${grown}`);
+            logger.debug(`[hybrid] Growing batch ${batchSize} -> ${grown}`);
             batchSize = grown;
           }
         } catch (error) {
@@ -391,8 +397,9 @@ async function main(): Promise<void> {
       }
 
       logger.info(
-        `Hybrid result: processed=${processed} across ${pass} pass(es), final batch=${batchSize}; last=${JSON.stringify(lastResult)}`,
+        `Total: ${processed} borrados en ${pass} lote(s). Último lote: ${batchSize}.`,
       );
+      logger.debug(`Hybrid last result ${JSON.stringify(lastResult)}`);
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);
       const accounts = loadBlockAccounts(options.accountsFile);

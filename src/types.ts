@@ -48,6 +48,7 @@ export interface CliOptions {
   blockLimit: number | undefined;
   blockDryRun: boolean;
   blockDelay: NumberRange;
+  browser: string;
   range: DateRange;
   batchSize: NumberRange;
   clickDelay: NumberRange;

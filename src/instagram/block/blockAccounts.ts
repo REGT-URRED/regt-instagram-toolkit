@@ -58,7 +58,7 @@ export async function blockAccounts(
     }
 
     processed += 1;
-    logger.info(`[block] @${username} (${processed}${options.limit ? `/${options.limit}` : ''})`);
+    const counter = `${processed}/${accounts.length}`;
     try {
       await page.goto(`https://www.instagram.com/${encodeURIComponent(username)}/`, {
         waitUntil: 'domcontentloaded',
@@ -84,18 +84,18 @@ export async function blockAccounts(
       if (state.notFound) {
         result.notFound += 1;
         recordBlock(ledger, options.ledgerPath, username, 'notFound');
-        logger.warn(`[block] @${username} was not found. Skipping.`);
+        logger.warn(`[${counter}] @${username}: no existe`);
         continue;
       }
       if (state.blocked) {
         result.alreadyBlocked += 1;
         recordBlock(ledger, options.ledgerPath, username, 'alreadyBlocked');
-        logger.info(`[block] @${username} was already blocked. Skipping.`);
+        logger.info(`[${counter}] @${username}: ya bloqueada`);
         continue;
       }
       if (options.dryRun) {
         result.wouldBlock += 1;
-        logger.info(`[block] @${username} would be blocked (verification mode).`);
+        logger.info(`[${counter}] @${username}: se bloquearía`);
         continue;
       }
 
@@ -134,13 +134,13 @@ export async function blockAccounts(
       await waitForBlockedState(page, unblockLabels);
       result.blocked += 1;
       recordBlock(ledger, options.ledgerPath, username, 'blocked');
-      logger.info(`[block] @${username} blocked.`);
+      logger.info(`[${counter}] @${username}: bloqueada`);
     } catch (error) {
       result.failed += 1;
       const message = error instanceof Error ? error.message : String(error);
       failures.push({ username, error: message });
       recordBlock(ledger, options.ledgerPath, username, 'failed');
-      logger.error(`[block] @${username} failed: ${message}`);
+      logger.error(`[${counter}] @${username}: fallo (${message})`);
       if (message.includes('try again later')) {
         logger.warn('[block] Stopping the run after a throttle signal.');
         break;

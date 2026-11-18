@@ -416,7 +416,7 @@ export async function runHybridBatch(
   }
   governor.recordSuccess();
 
-  logger.info(
+  logger.debug(
     `[hybrid] timings goto=${timings.gotoMs ?? 0}ms list=${timings.listWaitMs ?? 0}ms select=${timings.selectModeMs ?? 0}ms selection=${timings.selectionMs ?? 0}ms action=${timings.actionMs ?? 0}ms confirm=${timings.confirmMs ?? 0}ms mutation=${timings.mutationMs ?? 0}ms`,
   );
   logger.info(`[hybrid] Recorded ${ledger.size} stable id(s) in the ledger.`);

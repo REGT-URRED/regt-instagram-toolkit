@@ -6,14 +6,14 @@ Herramienta local para tu propia cuenta de Instagram:
 - **Eliminar tus comentarios** de todo tu historial.
 - **Bloquear cuentas** de anuncios (Temu, AliExpress y cualquier lista comunitaria) para dejar de ver sus publicaciones y anuncios.
 
-Funciona con la interfaz web real de Instagram en Chrome o Brave. El programa abre un navegador visible, tú inicias sesión a mano y el código nunca lee ni guarda tus credenciales.
+Funciona con la interfaz web real de Instagram en Brave, Chrome, Edge, Chromium, Opera o Vivaldi (se detecta solo). El programa abre un navegador visible, tú inicias sesión a mano y el código nunca lee ni guarda tus credenciales.
 
 Autor: **REGT-URRED**. Licencia: **Unlicense** (dominio público).
 
 ## Requisitos
 
 - Node.js 20 o superior.
-- Chrome o Brave instalado.
+- Un navegador Chromium instalado: Brave, Chrome, Edge, Chromium, Opera o Vivaldi.
 - Una cuenta de Instagram propia.
 
 ## Instalación
@@ -23,6 +23,23 @@ git clone https://github.com/REGT-URRED/regt-instagram-toolkit.git
 cd regt-instagram-toolkit
 npm install
 npm run build
+```
+
+## Inicio rápido (recomendado)
+
+En Windows, doble clic en **`iniciar.cmd`**. En cualquier sistema:
+
+```sh
+npm run menu
+```
+
+Menú de una pantalla: `1` likes, `2` comentarios, `3` bloquear cuentas, `4` salir. El navegador se detecta automáticamente y solo se muestran contadores (borrados, ya bloqueadas, fallos), no logs técnicos.
+
+Para forzar un navegador concreto:
+
+```sh
+node ./dist/cli.js --comments --browser edge
+node ./dist/cli.js --likes --browser chrome
 ```
 
 ## Uso

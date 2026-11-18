@@ -6,6 +6,7 @@ import puppeteer, { type Browser, type Page } from 'puppeteer';
 
 export interface BrowserSessionOptions {
   rootDir: string;
+  browser?: string;
   profileDir?: string;
   profileName?: string;
   chromeExecutablePath?: string;
@@ -169,17 +170,163 @@ function fromEnvPath(name: string, ...segments: string[]): string | undefined {
   return directory ? path.join(directory, ...segments) : undefined;
 }
 
-function findSystemUserDataDir(): string | undefined {
-  const systemProfileCandidates = [
-    path.join(os.homedir(), '.config/google-chrome'),
-    path.join(os.homedir(), '.config/chromium'),
-    path.join(os.homedir(), '.config/BraveSoftware/Brave-Browser'),
-    fromEnvPath('LOCALAPPDATA', 'Google', 'Chrome', 'User Data'),
-    fromEnvPath('LOCALAPPDATA', 'Chromium', 'User Data'),
-    fromEnvPath('LOCALAPPDATA', 'BraveSoftware', 'Brave-Browser', 'User Data'),
-  ];
+interface BrowserCandidate {
+  id: string;
+  name: string;
+  executables: string[];
+  userDataDirs: string[];
+}
 
-  return systemProfileCandidates.find((candidate) => candidate && fs.existsSync(candidate));
+function getBrowserCandidates(): BrowserCandidate[] {
+  const local = (...segments: string[]): string | undefined =>
+    fromEnvPath('LOCALAPPDATA', ...segments);
+  const programFiles = (...segments: string[]): string | undefined =>
+    fromEnvPath('PROGRAMFILES', ...segments);
+  const programFilesX86 = (...segments: string[]): string | undefined =>
+    fromEnvPath('PROGRAMFILES(X86)', ...segments);
+  const appData = (...segments: string[]): string | undefined => fromEnvPath('APPDATA', ...segments);
+  const home = (...segments: string[]): string => path.join(os.homedir(), ...segments);
+  const clean = (values: Array<string | undefined>): string[] =>
+    values.filter((value): value is string => Boolean(value));
+
+  return [
+    {
+      id: 'brave',
+      name: 'Brave',
+      executables: clean([
+        local('BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+        programFiles('BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+        programFilesX86('BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+        '/usr/bin/brave-browser',
+        '/usr/bin/brave',
+        '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+        '/mnt/c/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe',
+      ]),
+      userDataDirs: clean([
+        local('BraveSoftware', 'Brave-Browser', 'User Data'),
+        home('.config', 'BraveSoftware', 'Brave-Browser'),
+        home('Library', 'Application Support', 'BraveSoftware', 'Brave-Browser'),
+      ]),
+    },
+    {
+      id: 'chrome',
+      name: 'Google Chrome',
+      executables: clean([
+        local('Google', 'Chrome', 'Application', 'chrome.exe'),
+        programFiles('Google', 'Chrome', 'Application', 'chrome.exe'),
+        programFilesX86('Google', 'Chrome', 'Application', 'chrome.exe'),
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
+      ]),
+      userDataDirs: clean([
+        local('Google', 'Chrome', 'User Data'),
+        home('.config', 'google-chrome'),
+        home('Library', 'Application Support', 'Google', 'Chrome'),
+      ]),
+    },
+    {
+      id: 'edge',
+      name: 'Microsoft Edge',
+      executables: clean([
+        local('Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        programFiles('Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        programFilesX86('Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        '/usr/bin/microsoft-edge',
+        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+      ]),
+      userDataDirs: clean([
+        local('Microsoft', 'Edge', 'User Data'),
+        home('.config', 'microsoft-edge'),
+        home('Library', 'Application Support', 'Microsoft Edge'),
+      ]),
+    },
+    {
+      id: 'chromium',
+      name: 'Chromium',
+      executables: clean([
+        local('Chromium', 'Application', 'chrome.exe'),
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      ]),
+      userDataDirs: clean([
+        local('Chromium', 'User Data'),
+        home('.config', 'chromium'),
+        home('Library', 'Application Support', 'Chromium'),
+      ]),
+    },
+    {
+      id: 'opera',
+      name: 'Opera',
+      executables: clean([
+        local('Programs', 'Opera', 'opera.exe'),
+        '/usr/bin/opera',
+        '/Applications/Opera.app/Contents/MacOS/Opera',
+      ]),
+      userDataDirs: clean([
+        appData('Opera Software', 'Opera Stable'),
+        home('.config', 'opera'),
+        home('Library', 'Application Support', 'com.operasoftware.Opera'),
+      ]),
+    },
+    {
+      id: 'vivaldi',
+      name: 'Vivaldi',
+      executables: clean([
+        local('Vivaldi', 'Application', 'vivaldi.exe'),
+        programFiles('Vivaldi', 'Application', 'vivaldi.exe'),
+        '/usr/bin/vivaldi',
+        '/Applications/Vivaldi.app/Contents/MacOS/Vivaldi',
+      ]),
+      userDataDirs: clean([
+        local('Vivaldi', 'User Data'),
+        home('.config', 'vivaldi'),
+        home('Library', 'Application Support', 'Vivaldi'),
+      ]),
+    },
+  ];
+}
+
+function detectBrowser(preferred?: string): {
+  id: string;
+  executable: string | undefined;
+  userDataDir: string | undefined;
+} | undefined {
+  const candidates = getBrowserCandidates();
+  const selected =
+    preferred && preferred !== 'auto'
+      ? candidates.filter((candidate) => candidate.id === preferred)
+      : candidates;
+
+  const resolved = selected
+    .map((candidate) => ({
+      id: candidate.id,
+      executable: candidate.executables.find((candidatePath) => fs.existsSync(candidatePath)),
+      userDataDir: candidate.userDataDirs.find((candidateDir) => fs.existsSync(candidateDir)),
+    }))
+    .filter((candidate) => candidate.executable || candidate.userDataDir);
+
+  return (
+    resolved.find((candidate) => candidate.executable && candidate.userDataDir) ??
+    resolved.find((candidate) => candidate.executable) ??
+    resolved[0]
+  );
+}
+
+export function detectBrowserName(preferred?: string): string | undefined {
+  const detected = detectBrowser(preferred);
+  if (!detected) {
+    return undefined;
+  }
+  const candidate = getBrowserCandidates().find((browser) => browser.id === detected.id);
+  return candidate ? `${candidate.name} (${detected.id})` : detected.id;
+}
+
+function findSystemUserDataDir(browser?: string): string | undefined {
+  return detectBrowser(browser)?.userDataDir;
 }
 
 function findWindowsLocalAppDataDir(): string | undefined {
@@ -305,9 +452,10 @@ function resolveChromeProfileLocation(
   profileName: string | undefined,
   useSystemProfile: boolean,
   executablePath: string | undefined,
+  browser?: string,
 ): ChromeProfileLocation {
   if (profileDir) {
-    const systemUserDataDir = findSystemUserDataDir();
+    const systemUserDataDir = findSystemUserDataDir(browser);
     if (
       !hasPathSeparator(profileDir) &&
       isChromeProfileDirectoryName(profileDir) &&
@@ -339,7 +487,7 @@ function resolveChromeProfileLocation(
   }
 
   if (useSystemProfile) {
-    const systemUserDataDir = findSystemUserDataDir();
+    const systemUserDataDir = findSystemUserDataDir(browser);
     return systemUserDataDir
       ? createChromeProfileLocation(systemUserDataDir, profileName)
       : getDefaultProfileLocation(rootDir, executablePath, profileName);
@@ -348,28 +496,16 @@ function resolveChromeProfileLocation(
   return getDefaultProfileLocation(rootDir, executablePath, profileName);
 }
 
-function findSystemChromeExecutable(): string | undefined {
-  return [
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    fromEnvPath('LOCALAPPDATA', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    fromEnvPath('PROGRAMFILES', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    fromEnvPath('PROGRAMFILES(X86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    fromEnvPath('LOCALAPPDATA', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
-    fromEnvPath('PROGRAMFILES', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
-    fromEnvPath('PROGRAMFILES(X86)', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
-    '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-    '/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    '/mnt/c/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe',
-    '/mnt/c/Program Files (x86)/BraveSoftware/Brave-Browser/Application/brave.exe',
-  ].find((candidate) => candidate && fs.existsSync(candidate));
+function findSystemChromeExecutable(browser?: string): string | undefined {
+  return detectBrowser(browser)?.executable;
 }
 
-function resolveChromeExecutablePath(chromeExecutablePath?: string): string | undefined {
+function resolveChromeExecutablePath(
+  chromeExecutablePath?: string,
+  browser?: string,
+): string | undefined {
   if (!chromeExecutablePath) {
-    return findSystemChromeExecutable();
+    return findSystemChromeExecutable(browser);
   }
 
   const resolvedPath = normalizePathForCurrentPlatform(chromeExecutablePath);
@@ -382,13 +518,17 @@ function resolveChromeExecutablePath(chromeExecutablePath?: string): string | un
 }
 
 export async function launchBrowser(options: BrowserSessionOptions): Promise<BrowserSession> {
-  const executablePath = resolveChromeExecutablePath(options.chromeExecutablePath);
+  const executablePath = resolveChromeExecutablePath(
+    options.chromeExecutablePath,
+    options.browser,
+  );
   const { filesystemUserDataDir, profileDirectory, userDataDir } = resolveChromeProfileLocation(
     options.rootDir,
     options.profileDir,
     options.profileName,
     options.useSystemProfile,
     executablePath,
+    options.browser,
   );
   fs.mkdirSync(filesystemUserDataDir, { recursive: true });
 

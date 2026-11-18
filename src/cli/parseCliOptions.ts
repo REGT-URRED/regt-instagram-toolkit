@@ -16,6 +16,7 @@ interface RawArguments {
   blockLimit?: number;
   blockDryRun: boolean;
   blockDelay: string;
+  browser: string;
   range?: string;
   from?: string;
   to?: string;
@@ -110,6 +111,7 @@ function buildCliOptions(rootDirectory: string, argv: RawArguments): CliOptions 
     blockLimit: argv.blockLimit,
     blockDryRun: argv.blockDryRun,
     blockDelay: parseIntegerRange(argv.blockDelay, '--block-delay', 500, 60_000, true),
+    browser: argv.browser,
     range: parseRange(argv.range, argv.from, argv.to),
     batchSize: parseIntegerRange(
       argv.batchSize,
@@ -219,6 +221,12 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
       type: 'string',
       default: '1500:3000',
       describe: 'Random wait between profile checks/blocks, e.g. 1500:3000 (ms).',
+    })
+    .option('browser', {
+      type: 'string',
+      choices: ['auto', 'brave', 'chrome', 'edge', 'chromium', 'opera', 'vivaldi'],
+      default: 'auto',
+      describe: 'Browser to launch. auto picks the first installed one (Brave, Chrome, Edge, Chromium, Opera, Vivaldi).',
     })
     .option('range', {
       type: 'string',
