@@ -73,6 +73,22 @@ export async function runHybridBatch(
   let banSignals = 0;
   let abortRequested = false;
   let pauseRequested = false;
+  let mutationSeen = false;
+
+  page.on('response', (response) => {
+    const request = response.request();
+    const url = response.url();
+    const postData = request.postData() ?? '';
+    if (
+      request.method() !== 'GET' &&
+      /instagram\.com\/(api|graphql)/.test(url) &&
+      response.status() >= 200 &&
+      response.status() < 300 &&
+      /(delete|unlike|block)/i.test(`${url} ${postData}`)
+    ) {
+      mutationSeen = true;
+    }
+  });
 
   new MutationRecorder(options.mutationsPath).attach(page);
   page.on('response', (response) => {
@@ -257,7 +273,21 @@ export async function runHybridBatch(
     throw new Error('The cleanup confirmation control was not found.');
   }
 
-  await sleep(2_000);
+  const mutationDeadline = Date.now() + 6_000;
+  while (!mutationSeen && Date.now() < mutationDeadline) {
+    await sleep(200);
+  }
+
+  if (!mutationSeen) {
+    for (const id of ids.slice(0, clicked)) {
+      ledger.mark(id, 'failed');
+    }
+    throw new Error(
+      'No successful delete/unlike request was observed after confirmation. Nothing was marked as processed.',
+    );
+  }
+
+  await sleep(1_000);
 
   const pageShowsBanText = await page.evaluate(() => {
     const text = (document.body.innerText || '').toLowerCase();

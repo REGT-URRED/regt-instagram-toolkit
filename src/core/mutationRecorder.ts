@@ -41,6 +41,7 @@ export class MutationRecorder {
 
       response
         .text()
+        .catch(() => '')
         .then((body) => {
           const contentType = response.headers()['content-type'];
           const record: RecordedMutation = {
