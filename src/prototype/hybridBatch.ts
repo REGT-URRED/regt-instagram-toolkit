@@ -68,6 +68,7 @@ export async function runHybridBatch(
   });
   let banSignals = 0;
   let abortRequested = false;
+  let pauseRequested = false;
 
   new MutationRecorder(options.mutationsPath).attach(page);
   page.on('response', (response) => {
@@ -80,8 +81,25 @@ export async function runHybridBatch(
       if (decision === 'abort') {
         abortRequested = true;
       }
+      if (decision === 'pause') {
+        pauseRequested = true;
+      }
     }
   });
+
+  const respectBanGuard = async (): Promise<void> => {
+    if (abortRequested) {
+      throw new Error(
+        `Aborting to protect the account: ${banSignals} ban signals in the window. Wait before retrying.`,
+      );
+    }
+    if (pauseRequested) {
+      pauseRequested = false;
+      const cooldown = guard.cooldownFor('pause');
+      logger.warn(`[hybrid] Pausing ${Math.round(cooldown / 1000)}s after ban signals.`);
+      await sleep(cooldown);
+    }
+  };
 
   logger.info(`[hybrid] Opening ${likesActivityUrl}`);
   await page.goto(likesActivityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
@@ -133,6 +151,7 @@ export async function runHybridBatch(
       clicked += 1;
     }
 
+    await respectBanGuard();
     await governor.wait();
   }
 
@@ -164,11 +183,7 @@ export async function runHybridBatch(
     });
   }
 
-  if (abortRequested) {
-    throw new Error(
-      `Aborting to protect the account: ${banSignals} ban signals in the window. Wait before retrying.`,
-    );
-  }
+  await respectBanGuard();
 
   await governor.wait();
   const acted =
