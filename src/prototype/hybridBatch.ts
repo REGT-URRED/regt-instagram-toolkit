@@ -196,13 +196,24 @@ export async function runHybridBatch(
     fastSelection = await page.evaluate(selectBatchInPage, selectionInput);
   } catch (error) {
     logger.warn('[hybrid] Selection context was interrupted; reloading once.');
-    await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await waitForDomReady(page);
-    await waitForPageIdle(page, 3_000, 500);
-    if (!(await activateSelectMode(page, selectLabels))) {
-      throw error;
+    try {
+      await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await waitForDomReady(page);
+      await waitForPageIdle(page, 2_000, 300);
+      if (!(await activateSelectMode(page, selectLabels))) {
+        throw new Error('The list did not enter selection mode after reloading.', {
+          cause: error,
+        });
+      }
+      fastSelection = await page.evaluate(selectBatchInPage, selectionInput);
+    } catch (retryError) {
+      throw new Error(
+        `Instagram did not recover after reloading (${String(
+          error,
+        )}); stopping before touching the account again: ${String(retryError)}`,
+        { cause: retryError },
+      );
     }
-    fastSelection = await page.evaluate(selectBatchInPage, selectionInput);
   }
   if (debugEnabled) {
     logger.info(
@@ -247,12 +258,16 @@ export async function runHybridBatch(
   await respectBanGuard();
 
   await governor.wait();
-  const actedByLabel = await clickByLabels(page, actionLabels, {
-    timeout: 6_000,
-    preferLast: true,
-    debugName: 'Cleanup action',
-  });
-  const acted = actedByLabel || (await invokeCapability(page, actionRule, 6_000));
+  const actedByDom = await clickActionByDom(page, actionLabels);
+  const actedByLabel = actedByDom
+    ? false
+    : await clickByLabels(page, actionLabels, {
+        timeout: 6_000,
+        preferLast: true,
+        debugName: 'Cleanup action',
+      });
+  const acted =
+    actedByDom || actedByLabel || (await invokeCapability(page, actionRule, 6_000));
   if (debugEnabled) {
     logger.info(`[hybrid][debug] action label=${actedByLabel} capability=${!actedByLabel}`);
   }
@@ -273,12 +288,23 @@ export async function runHybridBatch(
       );
     });
     if (!dialogOpen) {
-      await clickByLabels(page, actionLabels, {
-        timeout: 4_000,
-        preferLast: true,
-        debugName: 'Cleanup action retry',
-      });
+      await clickActionByDom(page, actionLabels);
       await sleep(800);
+      const stillClosed = await page.evaluate(() => {
+        const text = document.body.innerText;
+        return (
+          !text.includes('¿Eliminar comentarios?') &&
+          document.querySelectorAll('[role="dialog"],[aria-modal="true"]').length === 0
+        );
+      });
+      if (stillClosed) {
+        await clickByLabels(page, actionLabels, {
+          timeout: 4_000,
+          preferLast: true,
+          debugName: 'Cleanup action retry',
+        });
+        await sleep(800);
+      }
     }
   }
 
@@ -397,6 +423,36 @@ async function activateSelectMode(page: Page, labels: string[]): Promise<boolean
   } catch {
     return false;
   }
+}
+
+async function clickActionByDom(page: Page, labels: string[]): Promise<boolean> {
+  const words = labels.map((label) => label.trim().toLowerCase()).filter(Boolean);
+  return page.evaluate((normalized: string[]) => {
+    const isVisible = (element: Element): boolean => {
+      if (element.closest('[aria-hidden="true"]')) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none'
+      );
+    };
+    const matches = Array.from(
+      document.querySelectorAll('div,span,button,[role="button"]'),
+    ).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const target = matches.at(-1);
+    const clickable = target ? (target.closest('button,[role="button"]') ?? target) : null;
+    (clickable as HTMLElement | null)?.click();
+    return Boolean(clickable);
+  }, words);
 }
 
 async function clickDialogConfirm(page: Page, labels: string[]): Promise<boolean> {
