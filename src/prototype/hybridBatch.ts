@@ -19,9 +19,13 @@ import { getTranslationValues } from '../translations/loadTranslations.js';
 import type { TranslationDictionary } from '../types.js';
 import { logger } from '../utils/logger.js';
 
-const likesActivityUrl = 'https://www.instagram.com/your_activity/interactions/likes/';
+const activityUrls = {
+  likes: 'https://www.instagram.com/your_activity/interactions/likes/',
+  comments: 'https://www.instagram.com/your_activity/interactions/comments/',
+} as const;
 
 export interface HybridBatchOptions {
+  mode: 'likes' | 'comments';
   limit: number;
   dryRun: boolean;
   ledgerPath: string;
@@ -101,18 +105,31 @@ export async function runHybridBatch(
     }
   };
 
-  logger.info(`[hybrid] Opening ${likesActivityUrl}`);
-  await page.goto(likesActivityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  const activityUrl = activityUrls[options.mode];
+  logger.info(`[hybrid] Opening ${activityUrl}`);
+  await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await waitForDomReady(page);
   await waitForPageIdle(page, 3_000, 500);
 
+  const isLikes = options.mode === 'likes';
   const selectLabels = getTranslationValues(translations, ['select']);
-  const actionLabels = getTranslationValues(translations, ['unlike']);
-  const confirmLabels = getTranslationValues(translations, ['unlike', 'remove', 'confirm']);
+  const actionLabels = getTranslationValues(translations, isLikes ? ['unlike'] : ['delete']);
+  const confirmLabels = getTranslationValues(
+    translations,
+    isLikes ? ['unlike', 'remove', 'confirm'] : ['delete', 'confirm'],
+  );
+  const actionRule = isLikes ? capabilities.action : { role: 'button', names: actionLabels };
+  const confirmRule = isLikes
+    ? capabilities.confirm
+    : { role: 'button', names: confirmLabels, scope: 'dialog' as const };
 
   const selected =
     (await invokeCapability(page, capabilities.select)) ||
-    (await clickByLabels(page, selectLabels, { timeout: 8_000, debugName: 'Select' }));
+    (await clickByLabels(page, selectLabels, {
+      timeout: 8_000,
+      includeTextElements: true,
+      debugName: 'Select',
+    }));
   if (!selected) {
     throw new Error('The Select control was not found through capabilities or labels.');
   }
@@ -122,6 +139,7 @@ export async function runHybridBatch(
   const ids: string[] = [];
   let clicked = 0;
   let skipped = 0;
+  let emptyAttempts = 0;
 
   while (clicked < options.limit) {
     const target = await page.evaluate(collectNextVisibleBatchTarget, {
@@ -131,8 +149,35 @@ export async function runHybridBatch(
     });
 
     if (!target) {
-      break;
+      emptyAttempts += 1;
+      const scrolled = await page.evaluate(() => {
+        const box = document.querySelector('[data-testid="bulk_action_checkbox"]');
+        let element = box?.parentElement ?? null;
+        while (element && element !== document.body) {
+          const style = getComputedStyle(element);
+          if (
+            (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            element.scrollHeight > element.clientHeight + 10
+          ) {
+            const before = element.scrollTop;
+            element.scrollBy(0, Math.round(element.clientHeight * 0.8));
+            return element.scrollTop !== before;
+          }
+          element = element.parentElement;
+        }
+        const before = window.scrollY;
+        window.scrollBy(0, Math.round(window.innerHeight * 0.8));
+        return window.scrollY !== before;
+      });
+
+      if (!scrolled && emptyAttempts >= 8) {
+        break;
+      }
+      await sleep(scrolled ? 1_200 : 300);
+      continue;
     }
+
+    emptyAttempts = 0;
 
     ids.push(target.key);
 
@@ -187,7 +232,7 @@ export async function runHybridBatch(
 
   await governor.wait();
   const acted =
-    (await invokeCapability(page, capabilities.action, 6_000)) ||
+    (await invokeCapability(page, actionRule, 6_000)) ||
     (await clickByLabels(page, actionLabels, {
       timeout: 6_000,
       preferLast: true,
@@ -199,7 +244,7 @@ export async function runHybridBatch(
 
   await governor.wait();
   const confirmed =
-    (await invokeCapability(page, capabilities.confirm, 8_000)) ||
+    (await invokeCapability(page, confirmRule, 8_000)) ||
     (await clickByLabels(page, confirmLabels, {
       timeout: 8_000,
       preferLast: true,

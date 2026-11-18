@@ -312,19 +312,20 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     })
     .strict()
     .check((args) => {
-      const selectedModes = [
-        args.likes,
-        args.comments,
-        args['blockAccounts'],
-        args['hybrid'],
-      ].filter(Boolean).length;
+      const cleanupModes = [args.likes, args.comments, args['blockAccounts']].filter(
+        Boolean,
+      ).length;
 
-      if (selectedModes === 0) {
+      if (cleanupModes === 0 && !args['hybrid']) {
         throw new Error('Use one flag: --likes, --comments, --block-accounts or --hybrid.');
       }
 
-      if (selectedModes > 1) {
+      if (cleanupModes > 1) {
         throw new Error('Use only one mode per run. Start the program again for another mode.');
+      }
+
+      if (args['hybrid'] && args['blockAccounts']) {
+        throw new Error('--hybrid works with --likes or --comments, not with --block-accounts.');
       }
 
       parseIntegerRange(

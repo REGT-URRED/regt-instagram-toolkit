@@ -331,6 +331,7 @@ async function main(): Promise<void> {
       await waitForInstagramLogin(page, options.loginTimeout);
       const capabilities = loadCapabilities(path.join(rootDirectory, 'capabilities.json'));
       const result = await runHybridBatch(page, translations, capabilities, {
+        mode: options.modes.includes('comments') ? 'comments' : 'likes',
         limit: options.limit ?? 20,
         dryRun: options.dryRun,
         ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),

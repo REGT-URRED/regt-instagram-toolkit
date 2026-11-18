@@ -100,8 +100,8 @@ export async function invokeCapability(
       };
       const byId = new Map(nodes.map((node) => [node.nodeId, node]));
       const wantedRole = normalize(rule.role);
-      const match = nodes.find((node) => {
-        if (node.ignored || normalize(node.role?.value) !== wantedRole) {
+      const candidates = nodes.filter((node) => {
+        if (node.ignored || node.backendDOMNodeId === undefined) {
           return false;
         }
         if (rule.scope === 'dialog' && !isInsideDialog(node, byId)) {
@@ -109,6 +109,10 @@ export async function invokeCapability(
         }
         return matchesName(node.name?.value ?? '', rule.names);
       });
+      // Instagram often exposes labels as StaticText, so prefer a role match but
+      // accept a name-only match and climb to the nearest clickable ancestor.
+      const match =
+        candidates.find((node) => normalize(node.role?.value) === wantedRole) ?? candidates[0];
 
       if (match?.backendDOMNodeId !== undefined) {
         try {
@@ -120,7 +124,15 @@ export async function invokeCapability(
           }
           await client.send('Runtime.callFunctionOn', {
             objectId: object.objectId,
-            functionDeclaration: 'function () { this.click(); }',
+            functionDeclaration: `function () {
+              const start = this.nodeType === 3 ? this.parentElement : this;
+              const target =
+                start &&
+                (start.closest('button,[role="button"],a,[tabindex="0"],input') || start);
+              if (target) {
+                target.click();
+              }
+            }`,
           });
           return true;
         } catch {
