@@ -32,10 +32,9 @@ export class MutationRecorder {
 
       const url = request.url();
       const postData = request.postData() ?? '';
-      if (
-        !/instagram\.com\/(api|graphql)/.test(url) ||
-        !mutationPattern.test(`${url} ${postData}`)
-      ) {
+      const isMutationEndpoint =
+        /instagram\.com\/(api|graphql)/.test(url) || /\/async\/wbloks\/fetch\//.test(url);
+      if (!isMutationEndpoint || !mutationPattern.test(`${url} ${postData}`)) {
         return;
       }
 

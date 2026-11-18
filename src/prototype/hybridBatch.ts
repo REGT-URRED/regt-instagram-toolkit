@@ -79,9 +79,11 @@ export async function runHybridBatch(
     const request = response.request();
     const url = response.url();
     const postData = request.postData() ?? '';
+    const isMutationEndpoint =
+      /instagram\.com\/(api|graphql)/.test(url) || /\/async\/wbloks\/fetch\//.test(url);
     if (
       request.method() !== 'GET' &&
-      /instagram\.com\/(api|graphql)/.test(url) &&
+      isMutationEndpoint &&
       response.status() >= 200 &&
       response.status() < 300 &&
       /(delete|unlike|block)/i.test(`${url} ${postData}`)
