@@ -1,0 +1,49 @@
+{
+  "name": "regt-instagram-toolkit",
+  "version": "1.0.0",
+  "description": "Clean Instagram likes and comments, and block ad accounts from a community-maintained list.",
+  "type": "module",
+  "author": "REGT-URRED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/REGT-URRED/regt-instagram-toolkit.git"
+  },
+  "bin": {
+    "regt-toolkit": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build --silent && node ./dist/cli.js",
+    "likes": "npm run build --silent && node ./dist/cli.js --likes",
+    "comments": "npm run build --silent && node ./dist/cli.js --comments",
+    "block": "npm run build --silent && node ./dist/cli.js --block-accounts",
+    "clean": "rm -rf dist",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
+  },
+  "keywords": [
+    "instagram",
+    "cleanup",
+    "block-accounts",
+    "puppeteer"
+  ],
+  "license": "Unlicense",
+  "dependencies": {
+    "puppeteer": "^24.9.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.15.21",
+    "@types/yargs": "^17.0.33",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.59.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
