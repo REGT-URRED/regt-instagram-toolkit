@@ -12,6 +12,7 @@ interface RawArguments {
   blockAccounts: boolean;
   accountsFile: string;
   hybrid: boolean;
+  hybridPasses: number;
   range?: string;
   from?: string;
   to?: string;
@@ -102,6 +103,7 @@ function buildCliOptions(rootDirectory: string, argv: RawArguments): CliOptions 
     blockAccounts: argv.blockAccounts,
     accountsFile: path.resolve(argv.accountsFile),
     hybrid: argv.hybrid,
+    hybridPasses: argv.hybridPasses,
     range: parseRange(argv.range, argv.from, argv.to),
     batchSize: parseIntegerRange(
       argv.batchSize,
@@ -186,6 +188,11 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
       default: false,
       describe:
         'Run the hybrid prototype: accessibility capabilities, adaptive pacing, ledgers and ban guard.',
+    })
+    .option('hybrid-passes', {
+      type: 'number',
+      default: 1,
+      describe: 'How many batches the hybrid runs inside one browser session.',
     })
     .option('accounts-file', {
       type: 'string',

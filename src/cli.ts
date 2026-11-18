@@ -330,15 +330,32 @@ async function main(): Promise<void> {
     if (options.hybrid) {
       await waitForInstagramLogin(page, options.loginTimeout);
       const capabilities = loadCapabilities(path.join(rootDirectory, 'capabilities.json'));
-      const result = await runHybridBatch(page, translations, capabilities, {
-        mode: options.modes.includes('comments') ? 'comments' : 'likes',
-        limit: options.limit ?? 20,
-        dryRun: options.dryRun,
-        ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
-        mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
-      });
+      const passes = Math.max(1, Math.min(20, options.hybridPasses));
+      let processed = 0;
+      let lastResult: Awaited<ReturnType<typeof runHybridBatch>> | null = null;
 
-      logger.info(`Hybrid result: ${JSON.stringify(result)}`);
+      for (let pass = 1; pass <= passes; pass += 1) {
+        if (pass > 1) {
+          logger.info(`[hybrid] Pass ${pass}/${passes}`);
+        }
+        const result = await runHybridBatch(page, translations, capabilities, {
+          mode: options.modes.includes('comments') ? 'comments' : 'likes',
+          limit: options.limit ?? 20,
+          dryRun: options.dryRun,
+          ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
+          mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
+        });
+        processed += result.processed;
+        lastResult = result;
+        logger.info(`Hybrid pass ${pass}: ${JSON.stringify(result)}`);
+        if (result.processed === 0) {
+          break;
+        }
+      }
+
+      logger.info(
+        `Hybrid result: processed=${processed} across ${passes} pass(es); last=${JSON.stringify(lastResult)}`,
+      );
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);
       const accounts = loadBlockAccounts(options.accountsFile);

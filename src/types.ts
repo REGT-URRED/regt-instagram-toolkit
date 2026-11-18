@@ -38,6 +38,7 @@ export interface CliOptions {
   blockAccounts: boolean;
   accountsFile: string;
   hybrid: boolean;
+  hybridPasses: number;
   range: DateRange;
   batchSize: NumberRange;
   clickDelay: NumberRange;

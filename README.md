@@ -116,13 +116,15 @@ Motor experimental que combina varias defensas y sirve para medir rendimiento co
 ```sh
 node ./dist/cli.js --hybrid --limit 20 --dry-run   # solo selecciona
 node ./dist/cli.js --hybrid --limit 20             # borra el lote
+node ./dist/cli.js --hybrid --limit 20 --hybrid-passes 5  # 5 lotes en una sola sesión
 ```
 
 - **Capacidades por accesibilidad:** resuelve `Seleccionar`/`Ya no me gusta` por rol y nombre accesible, no por texto traducido (`capabilities.json`). Si falla, cae al clic por etiquetas.
 - **Rate governor AIMD:** sube el ritmo con éxitos y lo reduce al doble con señales de bloqueo, con jitter.
 - **Ban guard:** cuenta señales (HTTP 429, avisos de la UI) en una ventana; pausa y, al superar el umbral, aborta para proteger la cuenta.
 - **Ledger idempotente:** `.state/ledger.jsonl` guarda IDs estables ya procesados; reiniciar no repite trabajo.
-- **Grabador de mutaciones:** `.state/mutations.jsonl` registra lo que hace la web (sin cookies ni CSRF) para construir el futuro replay de API.
+- **Sesión reutilizada:** `--hybrid-passes N` ejecuta N lotes dentro del mismo navegador; solo recarga la página entre lotes en vez de relanzar Brave (40 ítems en 24 s frente a ~40 s en dos lanzamientos).
+- **Grabador de mutaciones:** `.state/mutations.jsonl` registra lo que hace la web (sin cookies ni CSRF). El replay de API se evaluó y quedó bloqueado: el `comments_screen` de Bloks trae `items_for_action` vacío y ninguna respuesta plana contiene los IDs; el cliente los arma en memoria.
 
 `.state/` y los perfiles de navegador quedan fuera de git.
 
@@ -135,6 +137,7 @@ Mediciones reales con una cuenta con ~40 comentarios (Brave, perfil del sistema)
 | Marcar 40 casillas | ~40 s (1,1 s/ítem) | **3,6 s** (11/s) |
 | Marcar 95 casillas | ~110 s | **18,4 s** |
 | Lote real de 20 comentarios (marcar + borrar + verificar) | ~34 s | **20 s** (60/min) |
+| Dos lotes de 20 en una sola sesión (`--hybrid-passes 2`) | ~40 s | **24 s** |
 
 El marcado ocurre dentro de la página en un solo `evaluate`: ráfagas de clics con jitter y verificación por identidad del nodo, sin dos viajes CDP por ítem.
 
