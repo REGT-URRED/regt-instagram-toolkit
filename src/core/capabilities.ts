@@ -6,6 +6,7 @@ export interface CapabilityRule {
   role: string;
   names: string[];
   scope?: 'page' | 'dialog';
+  preferLast?: boolean;
 }
 
 export interface CapabilitySet {
@@ -111,8 +112,11 @@ export async function invokeCapability(
       });
       // Instagram often exposes labels as StaticText, so prefer a role match but
       // accept a name-only match and climb to the nearest clickable ancestor.
-      const match =
-        candidates.find((node) => normalize(node.role?.value) === wantedRole) ?? candidates[0];
+      const roleMatches = candidates.filter(
+        (node) => normalize(node.role?.value) === wantedRole,
+      );
+      const pool = roleMatches.length > 0 ? roleMatches : candidates;
+      const match = rule.preferLast ? pool.at(-1) : pool[0];
 
       if (match?.backendDOMNodeId !== undefined) {
         try {

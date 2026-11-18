@@ -5,11 +5,13 @@
   },
   "action": {
     "role": "button",
-    "names": ["Ya no me gusta", "Unlike", "Je n'aime plus"]
+    "names": ["Ya no me gusta", "Unlike", "Je n'aime plus"],
+    "preferLast": true
   },
   "confirm": {
     "role": "button",
     "names": ["Ya no me gusta", "Unlike", "Confirmar", "Confirm", "Confirmer"],
-    "scope": "dialog"
+    "scope": "dialog",
+    "preferLast": true
   }
 }

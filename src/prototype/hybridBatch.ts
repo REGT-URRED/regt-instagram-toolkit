@@ -118,10 +118,12 @@ export async function runHybridBatch(
     translations,
     isLikes ? ['unlike', 'remove', 'confirm'] : ['delete', 'confirm'],
   );
-  const actionRule = isLikes ? capabilities.action : { role: 'button', names: actionLabels };
+  const actionRule = isLikes
+    ? { ...capabilities.action, preferLast: true }
+    : { role: 'button', names: actionLabels, preferLast: true };
   const confirmRule = isLikes
-    ? capabilities.confirm
-    : { role: 'button', names: confirmLabels, scope: 'dialog' as const };
+    ? { ...capabilities.confirm, scope: 'dialog' as const, preferLast: true }
+    : { role: 'button', names: confirmLabels, scope: 'dialog' as const, preferLast: true };
 
   const selected =
     (await invokeCapability(page, capabilities.select)) ||
