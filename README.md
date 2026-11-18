@@ -126,6 +126,20 @@ node ./dist/cli.js --hybrid --limit 20             # borra el lote
 
 `.state/` y los perfiles de navegador quedan fuera de git.
 
+## Rendimiento medido
+
+Mediciones reales con una cuenta con ~40 comentarios (Brave, perfil del sistema):
+
+| Operación | Antes | Ahora |
+|---|---|---|
+| Marcar 40 casillas | ~40 s (1,1 s/ítem) | **3,6 s** (11/s) |
+| Marcar 95 casillas | ~110 s | **18,4 s** |
+| Lote real de 20 comentarios (marcar + borrar + verificar) | ~34 s | **20 s** (60/min) |
+
+El marcado ocurre dentro de la página en un solo `evaluate`: ráfagas de clics con jitter y verificación por identidad del nodo, sin dos viajes CDP por ítem.
+
+No hay port a Rust ni a Go: no existen `Cargo.toml`, `go.mod` ni fuentes `.rs`/`.go` en el repositorio. El cuello de botella era el DOM y el re-render de Instagram, no el runtime de TypeScript; portar el driver no habría cambiado la selección.
+
 ## Aviso
 
 - Usa solo tu propia cuenta.
