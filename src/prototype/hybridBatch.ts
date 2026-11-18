@@ -7,14 +7,8 @@ import { Ledger } from '../core/ledger.js';
 import { MutationRecorder } from '../core/mutationRecorder.js';
 import { RateGovernor, type RateGovernorSnapshot } from '../core/rateGovernor.js';
 import { clickByLabels } from '../instagram/clickByLabels.js';
-import {
-  clickSelectionTargetByKey,
-  collectNextVisibleBatchTarget,
-} from '../instagram/cleanup/browser/selectVisibleBatch.js';
-import {
-  getCheckboxCandidateSelector,
-  getSelectableItemsSelector,
-} from '../instagram/cleanup/selectors.js';
+import { selectBatchInPage } from '../instagram/cleanup/browser/selectVisibleBatch.js';
+import { getCheckboxCandidateSelector } from '../instagram/cleanup/selectors.js';
 import { getTranslationValues } from '../translations/loadTranslations.js';
 import type { TranslationDictionary } from '../types.js';
 import { logger } from '../utils/logger.js';
@@ -125,6 +119,9 @@ export async function runHybridBatch(
 
   const activityUrl = activityUrls[options.mode];
   logger.info(`[hybrid] Opening ${activityUrl}`);
+  // The activity list virtualizes rows to the viewport; a taller window renders
+  // more checkboxes and removes the per-item scroll round trips.
+  await page.setViewport({ width: 1280, height: 1800 });
   await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await waitForDomReady(page);
   await waitForPageIdle(page, 3_000, 500);
@@ -178,82 +175,48 @@ export async function runHybridBatch(
     ? { ...capabilities.confirm, scope: 'dialog' as const, preferLast: true }
     : { role: 'button', names: confirmLabels, scope: 'dialog' as const, preferLast: true };
 
-  const selected =
-    (await invokeCapability(page, capabilities.select)) ||
-    (await clickByLabels(page, selectLabels, {
-      timeout: 8_000,
-      includeTextElements: true,
-      debugName: 'Select',
-    }));
+  const selected = await activateSelectMode(page, selectLabels);
   if (!selected) {
-    throw new Error('The Select control was not found through capabilities or labels.');
+    throw new Error('The Select control did not enter selection mode.');
   }
 
   await sleep(1_500);
 
-  const ids: string[] = [];
-  const clickedIds: string[] = [];
-  let clicked = 0;
-  let emptyAttempts = 0;
-
-  while (clicked < batchLimit) {
-    const target = await page.evaluate(collectNextVisibleBatchTarget, {
-      checkboxSelector: getCheckboxCandidateSelector(),
-      controlText: getTranslationValues(translations, ['select', 'unlike', 'delete']),
-      ignoredKeys: ids,
-    });
-
-    if (!target) {
-      emptyAttempts += 1;
-      const scrolled = await page.evaluate(() => {
-        const box = document.querySelector('[data-testid="bulk_action_checkbox"]');
-        let element = box?.parentElement ?? null;
-        while (element && element !== document.body) {
-          const style = getComputedStyle(element);
-          if (
-            (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-            element.scrollHeight > element.clientHeight + 10
-          ) {
-            const before = element.scrollTop;
-            element.scrollBy(0, Math.round(element.clientHeight * 0.8));
-            return element.scrollTop !== before;
-          }
-          element = element.parentElement;
-        }
-        const before = window.scrollY;
-        window.scrollBy(0, Math.round(window.innerHeight * 0.8));
-        return window.scrollY !== before;
-      });
-
-      if (!scrolled && emptyAttempts >= 8) {
-        break;
-      }
-      await sleep(scrolled ? 1_200 : 300);
-      continue;
+  const controlText = getTranslationValues(translations, ['select', 'unlike', 'delete']);
+  const selectionInput = {
+    checkboxSelector: getCheckboxCandidateSelector(),
+    controlText,
+    limit: batchLimit,
+    minDelayMs: 20,
+    maxDelayMs: 40,
+  };
+  const fastStartedAt = Date.now();
+  let fastSelection;
+  try {
+    fastSelection = await page.evaluate(selectBatchInPage, selectionInput);
+  } catch (error) {
+    logger.warn('[hybrid] Selection context was interrupted; reloading once.');
+    await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await waitForDomReady(page);
+    await waitForPageIdle(page, 3_000, 500);
+    if (!(await activateSelectMode(page, selectLabels))) {
+      throw error;
     }
-
-    emptyAttempts = 0;
-
-    ids.push(target.key);
-
-    // The ledger is audit-only here: signatures can repeat and pending items may
-    // still be visible, so skipping by ledger key would leave work undone.
-    const ok = await page.evaluate(clickSelectionTargetByKey, {
-      checkboxSelector: getSelectableItemsSelector(),
-      controlText: getTranslationValues(translations, ['select', 'unlike', 'delete']),
-      key: target.key,
-    });
-
-    if (ok) {
-      clicked += 1;
-      clickedIds.push(target.key);
-    }
-
-    await respectBanGuard();
-    await governor.wait();
+    fastSelection = await page.evaluate(selectBatchInPage, selectionInput);
+  }
+  if (debugEnabled) {
+    logger.info(
+      `[hybrid][debug] fast ms=${Date.now() - fastStartedAt} rounds=${fastSelection.rounds} history=${fastSelection.history.join(',')}`,
+    );
+  }
+  const clickedIds = fastSelection.clickedKeys;
+  const clicked = clickedIds.length;
+  if (fastSelection.exhausted && clicked < batchLimit) {
+    logger.info(`[hybrid] Selected ${clicked} visible item(s); no more candidates in view.`);
   }
 
   await debugState('selected');
+  await sleep(1_000);
 
   if (clicked === 0) {
     logger.warn('[hybrid] No selectable item was found.');
@@ -297,6 +260,27 @@ export async function runHybridBatch(
     throw new Error('The cleanup action control was not found.');
   }
   await debugState('after-action');
+
+  // Instagram sometimes deletes straight from the toolbar and sometimes opens a
+  // confirmation sheet; give the toolbar a beat and retry once if nothing happened.
+  await sleep(1_200);
+  if (!mutationSeen) {
+    const dialogOpen = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return (
+        text.includes('¿Eliminar comentarios?') ||
+        document.querySelectorAll('[role="dialog"],[aria-modal="true"]').length > 0
+      );
+    });
+    if (!dialogOpen) {
+      await clickByLabels(page, actionLabels, {
+        timeout: 4_000,
+        preferLast: true,
+        debugName: 'Cleanup action retry',
+      });
+      await sleep(800);
+    }
+  }
 
   // Instagram sometimes deletes straight from the toolbar and sometimes opens a
   // confirmation sheet; wait briefly for the direct mutation before confirming.
@@ -376,6 +360,43 @@ export async function runHybridBatch(
 
   logger.info(`[hybrid] Recorded ${ledger.size} stable id(s) in the ledger.`);
   return buildResult({ clicked, startedAt, governor, guard, ledger, banSignals, options });
+}
+
+async function activateSelectMode(page: Page, labels: string[]): Promise<boolean> {
+  const words = labels.map((label) => label.trim().toLowerCase()).filter(Boolean);
+  const clicked = await page.evaluate((normalized: string[]) => {
+    const isVisible = (element: Element): boolean => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const matches = Array.from(
+      document.querySelectorAll('div,span,button,[role="button"]'),
+    ).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const target = matches.at(-1);
+    const clickable = target
+      ? (target.closest('button,[role="button"]') ?? target)
+      : null;
+    (clickable as HTMLElement | null)?.click();
+    return Boolean(clickable);
+  }, words);
+
+  if (!clicked) {
+    return false;
+  }
+
+  try {
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-testid="bulk_action_checkbox"]').length > 0,
+      { timeout: 8_000, polling: 200 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function clickDialogConfirm(page: Page, labels: string[]): Promise<boolean> {

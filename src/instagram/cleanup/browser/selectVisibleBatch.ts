@@ -893,3 +893,272 @@ export function collectSelectionResult({
 
   return new SelectionResultCollector().collect();
 }
+
+export interface FastSelectInput {
+  checkboxSelector: string;
+  controlText: string[];
+  limit: number;
+  ignoredKeys?: string[];
+  minDelayMs?: number;
+  maxDelayMs?: number;
+}
+
+export interface FastSelectResult {
+  clickedKeys: string[];
+  exhausted: boolean;
+  rounds: number;
+  lastBatch: number;
+  lastChecked: number;
+  history: string[];
+}
+
+export async function selectBatchInPage({
+  checkboxSelector,
+  controlText,
+  limit,
+  ignoredKeys = [],
+  minDelayMs = 20,
+  maxDelayMs = 40,
+}: FastSelectInput): Promise<FastSelectResult> {
+  class FastBatchSelector {
+    private readonly clickedKeys: string[] = [];
+    private readonly clickedSet = new Set<string>();
+    private readonly ignored = new Set(ignoredKeys);
+    private readonly controls = controlText
+      .map((word) => word.trim().toLowerCase())
+      .filter(Boolean);
+
+    public async run(): Promise<FastSelectResult> {
+      let emptyRounds = 0;
+      let rounds = 0;
+      let lastBatch = 0;
+      let lastChecked = 0;
+      const history: string[] = [];
+
+      while (this.clickedKeys.length < limit) {
+        const elements = this.scan().slice(0, limit - this.clickedKeys.length);
+
+        if (elements.length === 0) {
+          emptyRounds += 1;
+          const scrolled = await this.scrollAndWait();
+          if (!scrolled && emptyRounds >= 4) {
+            break;
+          }
+          continue;
+        }
+
+        emptyRounds = 0;
+        rounds += 1;
+        const batch: Array<{ element: Element; key: string }> = [];
+        for (const element of elements) {
+          const key = this.keyFor(element);
+          if (this.ignored.has(key) || this.clickedSet.has(key)) {
+            continue;
+          }
+          this.clickCandidate(element);
+          batch.push({ element, key });
+          await this.delay(
+            minDelayMs + Math.round(Math.random() * Math.max(1, maxDelayMs - minDelayMs)),
+          );
+        }
+
+        lastBatch = batch.length;
+        await this.delay(800);
+        lastChecked = batch.filter((item) => !item.element.isConnected || this.isChecked(item.element))
+          .length;
+        history.push(`${batch.length}->${lastChecked}`);
+        for (const item of batch) {
+          const failed = item.element.isConnected && !this.isChecked(item.element);
+          if (!failed && !this.clickedSet.has(item.key)) {
+            this.clickedSet.add(item.key);
+            this.clickedKeys.push(item.key);
+          }
+        }
+      }
+
+      return {
+        clickedKeys: this.clickedKeys,
+        exhausted: this.clickedKeys.length < limit,
+        rounds,
+        lastBatch,
+        lastChecked,
+        history,
+      };
+    }
+
+    private delay(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    private scan(): Element[] {
+      const itemCheckboxes = Array.from(
+        document.querySelectorAll('[data-testid="bulk_action_checkbox"]'),
+      );
+      const elements =
+        itemCheckboxes.length > 0
+          ? itemCheckboxes
+          : Array.from(document.querySelectorAll(checkboxSelector));
+
+      return elements.filter(
+        (element) =>
+          this.isVisible(element) &&
+          !this.isControl(element) &&
+          !this.isNavigationCandidate(element) &&
+          this.looksLikeCheckbox(element) &&
+          !this.isChecked(element),
+      );
+    }
+
+    private looksLikeCheckbox(element: Element): boolean {
+      if (element instanceof HTMLInputElement) {
+        return element.type === 'checkbox';
+      }
+      const testId = (element.getAttribute('data-testid') ?? '').toLowerCase();
+      const role = (element.getAttribute('role') ?? '').toLowerCase();
+      const ariaLabel = (element.getAttribute('aria-label') ?? '').toLowerCase();
+      const rect = element.getBoundingClientRect();
+      const longest = Math.max(rect.width, rect.height);
+      const shortest = Math.min(rect.width, rect.height);
+      return (
+        testId === 'bulk_action_checkbox' ||
+        role === 'checkbox' ||
+        element.hasAttribute('aria-checked') ||
+        ariaLabel.includes('checkbox') ||
+        ariaLabel.includes('casilla') ||
+        (shortest >= 8 && longest <= 96 && longest / shortest <= 3)
+      );
+    }
+
+    private isChecked(element: Element): boolean {
+      if (element instanceof HTMLInputElement) {
+        return element.checked;
+      }
+      return [element, ...Array.from(element.querySelectorAll('*'))].some((node) => {
+        if (node.getAttribute('aria-checked') === 'true') {
+          return true;
+        }
+        if (!(node instanceof HTMLElement)) {
+          return false;
+        }
+        const style = window.getComputedStyle(node);
+        const mask = style.maskImage || style.webkitMaskImage || '';
+        const background = style.backgroundImage || '';
+        const source = node.getAttribute('src') ?? node.getAttribute('href') ?? '';
+        const signature = `${mask} ${background} ${source}`.toLowerCase();
+        return signature.includes('circle-check') || signature.includes('check__filled');
+      });
+    }
+
+    private clickCandidate(element: Element): void {
+      const clickable =
+        element.querySelector<HTMLElement>('[role="button"],[tabindex="0"],button') ??
+        (element instanceof HTMLElement ? element : null);
+      clickable?.click();
+    }
+
+    private isVisible(element: Element): boolean {
+      if (element.closest('[aria-hidden="true"]')) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        rect.width >= 8 &&
+        rect.height >= 8 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none'
+      );
+    }
+
+    private isControl(element: Element): boolean {
+      const text = (element.textContent || element.getAttribute('aria-label') || '')
+        .trim()
+        .toLowerCase();
+      return this.controls.some((word) => text.includes(word));
+    }
+
+    private isNavigationCandidate(element: Element): boolean {
+      const link = element.closest('a[href]');
+      const href = link?.getAttribute('href') ?? '';
+      return (
+        href.includes('facebook.com/help') ||
+        href.includes('/help/') ||
+        href.includes('/web/lite') ||
+        href.includes('/p/') ||
+        href.includes('/reel/')
+      );
+    }
+
+    private async scrollAndWait(): Promise<boolean> {
+      const boxes = Array.from(document.querySelectorAll(checkboxSelector));
+      const last = boxes.at(-1);
+      if (!last) {
+        return false;
+      }
+      const beforeTop = last.getBoundingClientRect().top;
+      last.scrollIntoView({ block: 'center' });
+      window.scrollBy(0, Math.round(window.innerHeight * 0.5));
+      await this.delay(600);
+
+      const afterBoxes = Array.from(document.querySelectorAll(checkboxSelector));
+      const newLast = afterBoxes.at(-1);
+      if (!newLast) {
+        return false;
+      }
+      const afterTop = newLast.getBoundingClientRect().top;
+      return (
+        newLast !== last ||
+        Math.abs(afterTop - beforeTop) > 4 ||
+        afterBoxes.length !== boxes.length
+      );
+    }
+
+    private keyFor(element: Element): string {
+      let current: Element | null = element;
+      for (let depth = 0; current && depth < 12; depth += 1) {
+        const mediaId =
+          current.getAttribute('media_id') ??
+          current.getAttribute('data-media-id') ??
+          current.getAttribute('data-id');
+        if (mediaId) {
+          return `id:${mediaId}`;
+        }
+        const link = current.querySelector<HTMLAnchorElement>('a[href*="/p/"], a[href*="/reel/"]');
+        if (link?.href) {
+          return `href:${this.stableUrlPart(link.href)}`;
+        }
+        const image = current.querySelector<HTMLImageElement>('img[src], img[currentSrc]');
+        const imageSource = image?.currentSrc || image?.src || '';
+        if (imageSource && !/\/t51\.[^/]+-19\//.test(imageSource)) {
+          return `image:${this.stableUrlPart(imageSource)}`;
+        }
+        current = current.parentElement;
+      }
+
+      let labelNode: Element | null = element;
+      for (let depth = 0; labelNode && depth < 12; depth += 1) {
+        const ariaLabel = labelNode.getAttribute('aria-label');
+        if (ariaLabel && !/casilla|checkbox|seleccionar/i.test(ariaLabel)) {
+          return `aria:${ariaLabel.trim().slice(0, 120).toLowerCase()}`;
+        }
+        labelNode = labelNode.parentElement;
+      }
+
+      const rect = element.getBoundingClientRect();
+      return `point:${Math.round((rect.left + rect.width / 2) / 16)}:${Math.round(
+        (rect.top + rect.height / 2) / 16,
+      )}`;
+    }
+
+    private stableUrlPart(value: string): string {
+      try {
+        const url = new URL(value, window.location.origin);
+        return url.searchParams.get('ig_cache_key') ?? `${url.hostname}${url.pathname}`;
+      } catch {
+        return value.split('?')[0] ?? value;
+      }
+    }
+  }
+
+  return new FastBatchSelector().run();
+}
