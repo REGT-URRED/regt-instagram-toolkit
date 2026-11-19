@@ -295,10 +295,12 @@ async function main(): Promise<void> {
       await waitForInstagramLogin(page, options.loginTimeout);
       const capabilities = loadCapabilities(path.join(rootDirectory, 'capabilities.json'));
       const maxPasses = Math.max(0, Math.min(50, options.hybridPasses));
-      const maxBatch = Math.min(options.limit ?? 95, 95);
+      const hybridMode = options.modes.includes('comments') ? 'comments' : 'likes';
+      const hardCap = hybridMode === 'comments' ? 60 : 95;
+      const maxBatch = Math.min(options.limit ?? hardCap, hardCap);
+      const minBatch = Math.min(20, maxBatch);
       const passLimit = maxPasses === 0 ? 50 : maxPasses;
-      let batchSize = Math.min(maxBatch, 20);
-      let growthCeiling = maxBatch;
+      let batchCeiling = maxBatch;
       let processed = 0;
       let lastResult: Awaited<ReturnType<typeof runHybridBatch>> | null = null;
       let pass = 0;
@@ -306,9 +308,11 @@ async function main(): Promise<void> {
 
       while (pass < passLimit) {
         pass += 1;
+        const batchSize =
+          minBatch + Math.floor(Math.random() * Math.max(1, batchCeiling - minBatch + 1));
         try {
           const result = await runHybridBatch(page, translations, capabilities, {
-            mode: options.modes.includes('comments') ? 'comments' : 'likes',
+            mode: hybridMode,
             limit: batchSize,
             dryRun: options.dryRun,
             ...(options.noStore
@@ -330,30 +334,21 @@ async function main(): Promise<void> {
           if (options.dryRun || result.processed === 0) {
             break;
           }
-          if (result.processed >= batchSize && batchSize < maxBatch) {
-            const grown = Math.min(
-              growthCeiling,
-              Math.max(batchSize + 20, Math.floor(batchSize * 1.5)),
-            );
-            logger.debug(`[hybrid] Growing batch ${batchSize} -> ${grown}`);
-            batchSize = grown;
-          }
         } catch (error) {
           failures += 1;
           if (failures >= 3) {
             throw error;
           }
-          growthCeiling = Math.min(growthCeiling, Math.max(20, batchSize - 1));
-          batchSize = Math.max(20, Math.floor(batchSize / 2));
+          batchCeiling = Math.min(batchCeiling, Math.max(minBatch, batchSize - 1));
           const cooldown = 8_000 * failures;
           logger.warn(
-            `[hybrid] Pass failed; growth ceiling ${growthCeiling}, backing off to batch ${batchSize} in ${cooldown / 1000}s (${String(error)})`,
+            `[hybrid] Pass failed; batch ceiling ${batchCeiling}, retrying in ${cooldown / 1000}s (${String(error)})`,
           );
           await sleep(cooldown);
         }
       }
 
-      logger.info(`Total: ${processed} borrados en ${pass} lote(s). Último lote: ${batchSize}.`);
+      logger.info(`Total: ${processed} borrados en ${pass} lote(s).`);
       logger.debug(`Hybrid last result ${JSON.stringify(lastResult)}`);
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);

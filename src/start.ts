@@ -51,12 +51,19 @@ async function main(): Promise<void> {
 
   let args: string[] = [];
   if (choice === '1' || choice === '2') {
-    const answer = (await rl.question('  ¿Cuántos por lote? [20]: ')).trim();
-    const limit = Math.max(1, Math.min(95, Number(answer) || 20));
-    args =
-      choice === '1'
-        ? ['--likes', '--limit', String(limit)]
-        : ['--hybrid', '--comments', '--limit', String(limit), '--hybrid-passes', '0'];
+    const answer = (
+      await rl.question('  ¿Máximo por lote? [20] (lotes aleatorios): ')
+    ).trim();
+    const requested = Math.max(1, Number(answer) || 20);
+    if (choice === '1') {
+      // Likes: random batch between 20 and the chosen maximum (UI caps ~95).
+      const maxBatch = Math.min(95, Math.max(20, requested));
+      args = ['--likes', '--batch-size', `20:${maxBatch}`];
+    } else {
+      // Comments: random batch between 20 and the chosen maximum (cap 60).
+      const maxBatch = Math.min(60, Math.max(1, requested));
+      args = ['--hybrid', '--comments', '--limit', String(maxBatch), '--hybrid-passes', '0'];
+    }
   } else if (choice === '3') {
     args = ['--block-accounts'];
   } else {

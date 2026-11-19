@@ -43,7 +43,7 @@ Menú de una pantalla:
 4) Salir
 ```
 
-Solo pregunta cuántos por lote (Enter = 20). El navegador se detecta solo y la ventana se cierra al terminar.
+Solo pregunta el máximo por lote (Enter = 20); cada lote usa un tamaño aleatorio entre 20 y ese máximo. El navegador se detecta solo y la ventana se cierra al terminar.
 
 ## Uso directo
 
@@ -56,7 +56,8 @@ Solo pregunta cuántos por lote (Enter = 20). El navegador se detecta solo y la 
 Opciones útiles:
 
 ```sh
-node ./dist/cli.js --comments --limit 30          # lote de 30
+node ./dist/cli.js --comments --limit 30          # máximo de lote 30 (aleatorio 20-30)
+node ./dist/cli.js --likes --batch-size 20:80     # lotes aleatorios 20-80 (sin tope total)
 node ./dist/cli.js --comments --hybrid-passes 0   # drena hasta vaciar
 node ./dist/cli.js --block-accounts --block-limit 50 --block-dry-run  # solo verifica
 node ./dist/cli.js --comments --browser edge      # fuerza navegador
@@ -127,7 +128,9 @@ Para depurar: añade `--log-level debug`.
 
 ## Límites reales
 
-- Instagram permite ~95 selecciones por lote; la herramienta usa 20 por defecto y crece sola si todo va bien.
+- Cada lote usa un tamaño aleatorio entre 20 y el máximo elegido, nunca un valor fijo.
+- Likes: máximo 95 por lote (la UI se deshabilita pasadas ~99 selecciones). Comentarios: máximo 60 por lote.
+- Los clics entre checkboxes llevan un retraso aleatorio de 8-45 ms, distinto en cada clic.
 - Tras muchos borrados puede bloquear en silencio: la UI se vacía pero no borra. La herramienta lo detecta, se detiene y no marca nada como hecho.
 - El bloqueo es reanudable: `.state/block-ledger.jsonl` evita repetir cuentas ya procesadas.
 - Usa solo tu cuenta y a tu ritmo.

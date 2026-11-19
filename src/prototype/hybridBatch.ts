@@ -212,8 +212,9 @@ export async function runHybridBatch(
     checkboxSelector: getCheckboxCandidateSelector(),
     controlText,
     limit: batchLimit,
-    minDelayMs: 20,
-    maxDelayMs: 40,
+    // Randomized micro-delay per checkbox click (8-45ms), not a fixed rule.
+    minDelayMs: 8,
+    maxDelayMs: 45,
   };
   const fastStartedAt = Date.now();
   let fastSelection;
