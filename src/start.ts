@@ -31,6 +31,24 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --- Selección de navegador y perfil ---
+  const selectedBrowserDefault = detected || 'auto';
+  const browserAnswer = (
+    await rl.question(`  Navegador [${selectedBrowserDefault}/brave/chrome/edge/opera/vivaldi] (${selectedBrowserDefault}): `)
+  ).trim();
+  const selectedBrowser = browserAnswer || selectedBrowserDefault;
+
+  console.log('');
+  console.log('  ⚠ Si eliges tu perfil real del navegador, la herramienta usará la pestaña');
+  console.log('    original donde ya iniciaste sesión en Instagram.');
+  console.log('    Te recomendamos usar otro navegador mientras la herramienta trabaja.');
+  console.log('');
+  const profileAnswer = (
+    await rl.question('  ¿Usar tu perfil del navegador actual (sesión iniciada)? [s/N]: ')
+  ).trim();
+  const useSystemProfile =
+    profileAnswer.toLowerCase() === 's' || profileAnswer.toLowerCase() === 'si';
+
   let args: string[] = [];
   if (choice === '1' || choice === '2') {
     const answer = (await rl.question('  ¿Cuántos por lote? [20]: ')).trim();
@@ -45,6 +63,13 @@ async function main(): Promise<void> {
     rl.close();
     console.log('  Opción no válida.');
     return;
+  }
+
+  if (selectedBrowser && selectedBrowser !== 'auto') {
+    args.push('--browser', selectedBrowser);
+  }
+  if (useSystemProfile) {
+    args.push('--use-system-profile');
   }
 
   rl.close();
