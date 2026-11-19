@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "npm run build --silent && node ./dist/cli.js",
+    "start": "npm run build --silent && node ./dist/start.js",
     "likes": "npm run build --silent && node ./dist/cli.js --likes",
     "comments": "npm run build --silent && node ./dist/cli.js --comments",
     "block": "npm run build --silent && node ./dist/cli.js --block-accounts",
