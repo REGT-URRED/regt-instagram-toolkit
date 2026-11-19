@@ -327,6 +327,23 @@ export async function runHybridBatch(
   // confirmation sheet; give the toolbar a beat and retry once if nothing happened.
   await sleep(1_200);
   if (!mutationSeen) {
+    const dismissed = await dismissInstagramErrorDialog(page);
+    if (dismissed) {
+      banSignals += 1;
+      const decision = guard.record();
+      governor.recordBan();
+      logger.warn(
+        `[hybrid] Instagram rejected the action (error dialog). Level=${decision}, signals=${banSignals}.`,
+      );
+      if (decision === 'abort') {
+        throw new Error(
+          `Aborting to protect the account: Instagram rejected the action ${banSignals} time(s). Wait before retrying.`,
+        );
+      }
+      throw new Error(
+        'Instagram rejected the action (error dialog). Closed it and backing off before retrying.',
+      );
+    }
     const dialogOpen = await page.evaluate(() => {
       const text = document.body.innerText;
       return (
@@ -414,7 +431,10 @@ export async function runHybridBatch(
       text.includes('desmarcar algunos') ||
       text.includes('unselect some') ||
       text.includes('try again later') ||
-      text.includes('intenta de nuevo mas tarde')
+      text.includes('intenta de nuevo mas tarde') ||
+      text.includes('se produjo un error') ||
+      text.includes('hubo un problema') ||
+      text.includes('there was a problem')
     );
   });
   if (pageShowsBanText) {
@@ -522,6 +542,59 @@ async function activateSelectMode(
   } catch {
     return false;
   }
+}
+
+async function dismissInstagramErrorDialog(page: Page): Promise<boolean> {
+  const point = await page.evaluate(() => {
+    const text = (document.body.innerText || '').toLowerCase();
+    const hasError =
+      text.includes('se produjo un error') ||
+      text.includes('hubo un problema') ||
+      text.includes('there was a problem');
+    if (!hasError) {
+      return null;
+    }
+    const dialogs = Array.from(
+      document.querySelectorAll('[role="dialog"],[aria-modal="true"]'),
+    );
+    const dialog = dialogs.at(-1);
+    if (!dialog) {
+      return null;
+    }
+    const buttons = Array.from(dialog.querySelectorAll('button,[role="button"]'));
+    const accept = buttons.find((element) => {
+      const label = (
+        (element as HTMLElement).innerText ||
+        element.getAttribute('aria-label') ||
+        ''
+      )
+        .trim()
+        .toLowerCase();
+      return [
+        'aceptar',
+        'ok',
+        'entendido',
+        'try again',
+        'intentar de nuevo',
+        'reintentar',
+      ].includes(label);
+    });
+    if (!accept) {
+      return null;
+    }
+    const rect = accept.getBoundingClientRect();
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    };
+  });
+
+  if (!point) {
+    return false;
+  }
+
+  await page.mouse.click(point.x, point.y);
+  return true;
 }
 
 async function clickWithMouse(page: Page, labels: string[]): Promise<boolean> {

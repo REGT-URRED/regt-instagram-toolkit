@@ -24,6 +24,9 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [x] Verificar limpieza de comentarios en producción con Brave del sistema (5 comentarios, sin ban signals)
 - [x] Implementar lotes aleatorios y micro-clics variables (likes 20-95, comentarios 20-60, delay 8-45 ms)
 - [x] QA final: spinner Shruggie animado, scroll virtualizado, mensajes dry-run honestos, build+lint limpios
+- [x] QA del dialogo de error de Instagram (cierre con Aceptar + backoff)
+- [x] Limpieza y organizacion del proyecto (antiguos fuera del repo, runtime reseteado)
+- [ ] Reintentar limpieza de likes despues de esperar el limite temporal de Instagram
 - [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menú
 
 ---

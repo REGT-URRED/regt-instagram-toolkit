@@ -5,6 +5,9 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: manejo del dialogo de error de Instagram ("Se produjo un error") en likes/comentarios: cierra con Aceptar, registra ban signal y hace backoff para proteger la cuenta
+- [2026-11-19] chore: limpieza del proyecto — antiguos_ya_funcionales movido a D:/PROCESO/antiguos_ya_funcionales_backup; reset de dist/.state/.chrome-profile y rebuild
+- [2026-11-19] [commit] 5350efb feat: progreso Shruggie animado y QA final
 - [2026-11-19] qa: animación Shruggie con progreso acumulado por fase, scroll virtualizado mejorado (31/40 seleccionados en dry-run), mensajes dry-run honestos, timeout de lista 30s, retry de acción; build+lint limpios
 - [2026-11-19] [commit] 0851e83 feat: lotes aleatorios por pasada y micro-clics variables
 - [2026-11-19] feat: lotes aleatorios por pasada (likes 20-95, comentarios 20-60) y micro-clics con delay aleatorio 8-45 ms; dry-run verificado (lote 29 elegido de 20-40)
