@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 8b07e1b fix: detect real instagram likes mutations and add bounded error recovery
 - [2026-11-19] fix: la deteccion de la peticion real de Instagram comparaba el blocklist ("events", "logging", etc.) contra el cuerpo del request, y todo payload de Instagram contiene "events"; eso descartaba TODAS las peticiones validas y el lote se contaba como exitoso sin verificar nada. Ahora el blocklist solo mira la URL y el unlike se detecta por appid liked_unlike/unlike.
 - [2026-11-19] fix: el toast real de likes cambio en Instagram a "Indicaste que no te gustan N publicaciones"; se agregaron variantes es/en/fr al verificador y ya no depende del archivo de traducciones.
 - [2026-11-19] fix: el boton de accion y la confirmacion ahora se pulsan con mouse real (CDP) en vez de element.click(); el centro de actividades ignora el clic sintetico y el lote quedaba sin aplicar.
