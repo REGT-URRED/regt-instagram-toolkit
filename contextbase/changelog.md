@@ -5,6 +5,8 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 231a7fb chore: sync contextbase tras limpieza del proyecto
+- [2026-11-19] [commit] 0028693 fix: manejar dialogo de error de Instagram y limpiar proyecto
 - [2026-11-19] fix: manejo del dialogo de error de Instagram ("Se produjo un error") en likes/comentarios: cierra con Aceptar, registra ban signal y hace backoff para proteger la cuenta
 - [2026-11-19] chore: limpieza del proyecto — antiguos_ya_funcionales movido a D:/PROCESO/antiguos_ya_funcionales_backup; reset de dist/.state/.chrome-profile y rebuild
 - [2026-11-19] [commit] 5350efb feat: progreso Shruggie animado y QA final
