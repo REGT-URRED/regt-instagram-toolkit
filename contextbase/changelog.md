@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 80f3186 chore: sincronizar memoria contextbase
 - [2026-11-19] [commit] b122f97 feat: replace per-batch cap with a total goal and derived batch sizes
 - [2026-11-19] feat: el menu ya no pide "maximo por lote": ahora pide la META TOTAL a eliminar (ej. 1000). El tamaño de cada lote se calcula con ceil(restantes/4), acotado a 20..95 en likes y 20..60 en comentarios, y el ultimo lote se recorta para llegar exacto a la meta.
 - [2026-11-19] feat: nuevo flag --goal en el CLI (likes clasico e hibrido de comentarios) con progreso "acumulado X/meta" y cierre por meta alcanzada en vez de por limite.
