@@ -5,6 +5,9 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: emojis Shruggie siempre visibles en terminal (no dependen de isTTY); selector de navegador de una sola letra con enter automático (a=auto, b=brave, c=chrome, e=edge, o=opera, v=vivaldi)
+- [2026-11-19] [commit] c463a41 fix: emojis Shruggie siempre visibles + selector de navegador de una letra
+- [2026-11-19] [commit] ec85f11 chore: actualizar changelog con commits recientes
 - [2026-11-19] [commit] 3ff4008 fix: diálogo de confirmación de eliminación con botones BUTTON reales
 - [2026-11-19] fix: diálogo de confirmación de eliminación (botones BUTTON reales no divs) en botón Eliminar y confirmación; manejo de texto singular/plural del diálogo (¿Eliminar este comentario? / ¿Eliminar comentarios?); verificado en producción con bloques de 60 y 20 comentarios eliminados, 0 ban signals
 - [2026-11-19] feat: progreso Shruggie animado y QA final
