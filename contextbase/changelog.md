@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 14d7cef chore: sincronizar memoria contextbase
 - [2026-11-19] [commit] 63a4a6d chore: registrar commit en contextbase
 - [2026-11-19] [commit] 8b07e1b fix: detect real instagram likes mutations and add bounded error recovery
 - [2026-11-19] fix: la deteccion de la peticion real de Instagram comparaba el blocklist ("events", "logging", etc.) contra el cuerpo del request, y todo payload de Instagram contiene "events"; eso descartaba TODAS las peticiones validas y el lote se contaba como exitoso sin verificar nada. Ahora el blocklist solo mira la URL y el unlike se detecta por appid liked_unlike/unlike.
