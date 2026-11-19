@@ -6,7 +6,8 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { detectBrowserId, detectBrowserName } from './browser/launchBrowser.js';
 import { enableUtf8Console } from './utils/consoleEncoding.js';
-import { readKey, readLine } from './utils/prompt.js';
+import { askKeyChoice, askValidated, parsePositiveInt, parseYesNo } from './utils/menuPrompt.js';
+import { readLine } from './utils/prompt.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(rootDirectory, 'dist', 'cli.js');
@@ -29,6 +30,38 @@ const browserLabels: Record<string, string> = {
   vivaldi: 'Vivaldi',
 };
 
+const menuChoices = ['1', '2', '3', '4'] as const;
+type MenuChoice = (typeof menuChoices)[number];
+
+function isInteractive(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+async function askMenuChoice(): Promise<MenuChoice> {
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    const raw = (await readLine('  Opción [1-4]: ')).trim();
+
+    if (raw === '') {
+      if (!isInteractive()) {
+        return '4';
+      }
+
+      console.log('  No escribiste nada. Opciones: 1, 2, 3 o 4.');
+      continue;
+    }
+
+    if ((menuChoices as readonly string[]).includes(raw)) {
+      return raw as MenuChoice;
+    }
+
+    console.log(`  x "${raw}" no es una opción válida.`);
+    console.log('    Opciones: 1 likes · 2 comentarios · 3 bloquear · 4 salir');
+  }
+
+  console.log('  Demasiados intentos inválidos. Saliendo.');
+  return '4';
+}
+
 async function main(): Promise<void> {
   enableUtf8Console();
 
@@ -48,13 +81,9 @@ async function main(): Promise<void> {
   console.log('  4) Salir');
   console.log('');
 
-  const choice = (await readLine('  Opción [1-4]: ')).trim();
-  if (choice === '4' || choice === '') {
-    return;
-  }
-
-  if (choice !== '1' && choice !== '2' && choice !== '3') {
-    console.log('  Opción no válida.');
+  const choice = await askMenuChoice();
+  if (choice === '4') {
+    console.log('  Hasta luego.');
     return;
   }
 
@@ -70,8 +99,15 @@ async function main(): Promise<void> {
   );
   console.log('  Escribe una letra, sin Enter:');
 
-  const browserKey = await readKey('  > ');
-  const selectedBrowser = browserChoices[browserKey] ?? selectedBrowserDefault;
+  const selectedBrowser = await askKeyChoice({
+    prompt: '  > ',
+    choices: Object.entries(browserChoices).map(([key, value]) => ({
+      key,
+      value,
+      label: browserLabels[value] ?? value,
+    })),
+    defaultKey,
+  });
   console.log(`  Navegador elegido: ${browserLabels[selectedBrowser] ?? selectedBrowser}`);
 
   console.log('');
@@ -79,20 +115,29 @@ async function main(): Promise<void> {
   console.log('  y conviene que no tengas el navegador abierto durante la ejecución.');
   console.log('');
 
-  const profileAnswer = (
-    await readLine('  ¿Usar tu perfil del navegador actual (sesión iniciada)? [s/N]: ')
-  ).toLowerCase();
-  const useSystemProfile = profileAnswer === 's' || profileAnswer === 'si' || profileAnswer === 'sí';
+  const useSystemProfile = await askValidated<boolean>({
+    prompt: '  ¿Usar tu perfil del navegador actual (sesión iniciada)? [s/N]: ',
+    defaultValue: false,
+    parse: parseYesNo,
+    hint: 'Respondé S (sí) o N (no). Enter usa N.',
+  });
 
   let args: string[] = [];
   if (choice === '1' || choice === '2') {
+    const perBatchCap = choice === '1' ? 95 : 60;
     console.log('  Meta total a eliminar. El tamaño de cada lote se calcula solo');
-    console.log('  (hasta 95 por lote en likes y 60 en comentarios) hasta llegar a la meta.');
-    const answer = (await readLine('  ¿Cuántos querés eliminar en total? [20]: ')).trim();
-    const requested = Math.max(1, Number(answer) || 20);
+    console.log(`  (hasta ${perBatchCap} por lote) hasta llegar a la meta.`);
+
+    const requested = await askValidated<number>({
+      prompt: '  ¿Cuántos querés eliminar en total? [20]: ',
+      defaultValue: 20,
+      parse: (raw) => parsePositiveInt(raw, 100_000),
+      hint: 'Escribí un número mayor a 0, por ejemplo 100, 500 o 1k. Enter usa 20.',
+    });
+    console.log(`  Meta: ${requested} · lotes de hasta ${perBatchCap}.`);
 
     if (choice === '1') {
-      args = ['--likes', '--goal', String(requested), '--batch-size', '20:95'];
+      args = ['--likes', '--goal', String(requested), '--batch-size', `20:${perBatchCap}`];
     } else {
       args = [
         '--hybrid',
@@ -100,7 +145,7 @@ async function main(): Promise<void> {
         '--goal',
         String(requested),
         '--limit',
-        '60',
+        String(perBatchCap),
         '--hybrid-passes',
         '0',
       ];
@@ -132,13 +177,26 @@ async function main(): Promise<void> {
       cwd: rootDirectory,
       stdio: 'inherit',
     });
+    child.on('error', (error) => {
+      console.log(`  No se pudo iniciar la limpieza: ${error.message}`);
+      resolve(1);
+    });
     child.on('exit', (code) => resolve(code ?? 0));
   });
 
-  console.log(exitCode === 0 ? '\n  Listo.' : `\n  Terminó con código ${exitCode}.`);
+  if (exitCode === 0) {
+    console.log('\n  Listo.');
+    return;
+  }
+
+  console.log(`\n  Terminó con código ${exitCode}.`);
+  console.log('  Leé el mensaje de arriba; si fue un límite temporal de Instagram,');
+  console.log('  esperá entre 1 y 24 horas y volvé a ejecutar iniciar.cmd.');
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`\n  Ocurrió un problema inesperado: ${message}`);
+  console.error('  Volvé a ejecutar iniciar.cmd. Si sigue pasando, revisá que Node.js esté instalado.');
   process.exitCode = 1;
 });

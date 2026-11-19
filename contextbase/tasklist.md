@@ -16,6 +16,7 @@ Seguimiento del estado de tareas con alto contraste visual.
 ---
 
 ## Tareas Pendientes / En Progreso
+- [ ] Probar en el menu una meta grande real (ej. 200) para medir el ritmo de lotes y el throttling de Instagram
 - [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menu con el nuevo RecoveryPolicy
 
 - [ ] Validar cobertura de pruebas funcionales y unitarias
@@ -32,7 +33,8 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menu
 - [x] Implementar contraalgoritmo buen camino / mal camino (RecoveryPolicy) con limites por tipo de fallo
 - [x] Corregir deteccion de red y toast de likes (40 likes eliminados y verificados)
-- [x] Menu por meta total con lote calculado automaticamente (--goal, formula ceil(restantes/4) con tope 95 likes / 60 comentarios)
+- [x] Menu por meta total con lote calculado automaticamente
+- [x] Panel de menu con validacion, reintento de entradas y Enter sin colgarse (--goal, formula ceil(restantes/4) con tope 95 likes / 60 comentarios)
 
 ---
 *Regla: Marcar con `[x]` las tareas completadas y agregar con `[ ]` cualquier nuevo requerimiento técnico.*

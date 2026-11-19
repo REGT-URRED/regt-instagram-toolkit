@@ -34,6 +34,17 @@ function nextPipedAnswer(promptText: string): string {
   return answer;
 }
 
+// Arrow keys, focus events and paste markers arrive as ANSI escape sequences.
+// In raw mode they must be stripped before the input can be read as text.
+const ansiSequence = new RegExp(
+  ['\\u001b\\[[0-9;?]*[A-Za-z~]', '\\u001b[OPQRS]', '\\u001b'].join('|'),
+  'g',
+);
+
+function stripAnsiSequences(text: string): string {
+  return text.replace(ansiSequence, '');
+}
+
 export async function readKey(promptText: string): Promise<string> {
   if (!canPromptInteractively()) {
     return nextPipedAnswer(promptText).charAt(0).toLowerCase();
@@ -44,32 +55,53 @@ export async function readKey(promptText: string): Promise<string> {
   process.stdin.resume();
 
   return new Promise<string>((resolve) => {
-    const finish = (): void => {
+    let settled = false;
+
+    const finish = (result: string): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       process.stdin.off('data', onData);
+      process.stdin.off('end', onEnd);
       restoreStdin();
+      resolve(result);
     };
+
+    const onEnd = (): void => {
+      finish('');
+    };
+
     const onData = (chunk: Buffer): void => {
-      const text = chunk.toString('utf8');
-      if (text.includes('\u0003')) {
-        finish();
+      const raw = chunk.toString('utf8');
+
+      if (raw.includes('\u0003')) {
+        finish('');
         handleInterrupt();
       }
-      if (text === '\r' || text === '\n') {
-        finish();
+
+      // Enter may arrive as \r, \n or \r\n inside a single chunk.
+      if (/[\r\n]/.test(raw)) {
         process.stdout.write('\n');
-        resolve('');
+        finish('');
         return;
       }
-      const char = text.replace(/[\r\n]/g, '').charAt(0);
-      if (!char || char === '\u001b') {
+
+      const text = stripAnsiSequences(raw);
+      const char = Array.from(text).find((candidate) => candidate >= ' ');
+
+      if (!char) {
         return;
       }
-      finish();
+
       const normalized = char.toLowerCase();
       process.stdout.write(`${normalized}\n`);
-      resolve(normalized);
+      finish(normalized);
     };
+
     process.stdin.on('data', onData);
+    process.stdin.once('end', onEnd);
   });
 }
 
@@ -84,23 +116,39 @@ export async function readLine(promptText: string): Promise<string> {
 
   return new Promise<string>((resolve) => {
     let value = '';
-    const finish = (): void => {
+    let settled = false;
+
+    const finish = (result: string): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       process.stdin.off('data', onData);
+      process.stdin.off('end', onEnd);
       restoreStdin();
+      resolve(result);
     };
+
+    const onEnd = (): void => {
+      finish(value.trim());
+    };
+
     const onData = (chunk: Buffer): void => {
-      const text = chunk.toString('utf8');
+      const text = stripAnsiSequences(chunk.toString('utf8'));
+
       for (const char of text) {
         if (char === '\u0003') {
-          finish();
+          finish('');
           handleInterrupt();
         }
+
         if (char === '\r' || char === '\n') {
-          finish();
           process.stdout.write('\n');
-          resolve(value.trim());
+          finish(value.trim());
           return;
         }
+
         if (char === '\u007f' || char === '\b') {
           if (value.length > 0) {
             value = value.slice(0, -1);
@@ -108,15 +156,15 @@ export async function readLine(promptText: string): Promise<string> {
           }
           continue;
         }
-        if (char === '\u001b') {
-          continue;
-        }
+
         if (char >= ' ') {
           value += char;
           process.stdout.write(char);
         }
       }
     };
+
     process.stdin.on('data', onData);
+    process.stdin.once('end', onEnd);
   });
 }

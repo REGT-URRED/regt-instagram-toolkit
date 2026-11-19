@@ -5,6 +5,12 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: el panel de opciones ya no se cierra ni falla con entradas invalidas; repite la pregunta mostrando las opciones validas y, tras 5 intentos, usa el valor por defecto en vez de salir.
+- [2026-11-19] fix: Enter en el selector de navegador ya no se cuelga. En raw mode Enter puede llegar como "\r\n" en un solo chunk y antes no coincidia con "\r" ni con "\n"; ahora se detecta cualquier variante y usa el navegador predeterminado.
+- [2026-11-19] fix: se descartan las secuencias ANSI (flechas, focus, paste markers) que antes se colaban como texto en las respuestas; tambien se maneja EOF/stdin cerrado sin colgar el menu.
+- [2026-11-19] feat: validacion amigable de respuestas: la meta acepta 100, 1.000, 1,000, 1k y 2.5k; el perfil acepta S/Si/Sí/Yes/N/No sin importar mayusculas ni acentos; opcion de menu fuera de rango o letra desconocida explica que escribir.
+- [2026-11-19] fix: si el proceso hijo no puede iniciar o termina con codigo distinto de 0, el menu muestra un mensaje claro y sugiere volver a ejecutar en vez de mostrar solo un numero.
+- [2026-11-19] [commit] 44fc6bb chore: registrar commit en contextbase
 - [2026-11-19] [commit] c87c457 chore: registrar resultado de meta total en contextbase
 - [2026-11-19] Menu y CLI ahora trabajan por META TOTAL en vez de maximo por lote: nuevo flag --goal. Formula aplicada: tamano de lote = ceil(restantes/4), acotado a 20..95 en likes y 20..60 en comentarios; el ultimo lote se recorta para llegar exacto a la meta. Progreso muestra 'acumulado X/meta' y la corrida termina al alcanzar la meta (antes imprimia 'Limit reached: undefined'). Autotest: meta 1000 -> 23 lotes sumando 1000, meta 100 -> 5, meta 20 -> 1, meta 5 -> 1. Verificado en produccion con meta 3 (3 likes eliminados, toast + HTTP 200 liked_unlike). Commit b122f97.
 - [2026-11-19] [commit] 74d0646 chore: registrar commit en contextbase
