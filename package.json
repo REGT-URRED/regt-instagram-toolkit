@@ -23,7 +23,8 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "menu": "npm run build --silent && node ./dist/start.js",
-    "list:merge": "npm run build --silent && node ./dist/mergeList.js"
+    "list:merge": "npm run build --silent && node ./dist/mergeList.js",
+    "list:count": "npm run build --silent && node ./dist/listCount.js"
   },
   "keywords": [
     "instagram",

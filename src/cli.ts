@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +10,7 @@ import { waitForDomReady, waitForPageIdle } from './browser/waits.js';
 import { parseCliOptions } from './cli/parseCliOptions.js';
 import { loadCapabilities } from './core/capabilities.js';
 import { blockAccounts } from './instagram/block/blockAccounts.js';
+import { parseAccountsFile } from './instagram/block/accountList.js';
 import { cleanupHistory } from './instagram/cleanup.js';
 import { applyDateFilter } from './instagram/dateFilter.js';
 import { waitForInstagramLogin } from './instagram/session.js';
@@ -18,7 +18,6 @@ import { buildTarget } from './instagram/targets.js';
 import { runHybridBatch } from './prototype/hybridBatch.js';
 import { getTranslationValues, loadTranslations } from './translations/loadTranslations.js';
 import type {
-  BlockAccountEntry,
   CleanupOptions,
   CliOptions,
   TargetConfiguration,
@@ -268,81 +267,6 @@ function delay(durationMs: number): Promise<void> {
   });
 }
 
-function loadBlockAccounts(filePath: string): BlockAccountEntry[] {
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const extension = filePath.toLowerCase();
-  if (extension.endsWith('.txt') || extension.endsWith('.md')) {
-    const reserved: Record<string, true> = {
-      p: true,
-      reel: true,
-      reels: true,
-      explore: true,
-      accounts: true,
-      stories: true,
-      tv: true,
-      direct: true,
-      about: true,
-      legal: true,
-      developer: true,
-    };
-    const usernames = new Set<string>();
-
-    for (const line of raw.split(/\r?\n/)) {
-      for (const match of line.matchAll(/instagram\.com\/([A-Za-z0-9_.]+)/g)) {
-        const username = match[1]?.replace(/\.+$/, '');
-        if (username && reserved[username.toLowerCase()] !== true) {
-          usernames.add(username);
-        }
-      }
-      const bare = line.replace(/#.*$/, '').trim();
-      if (/^@?[A-Za-z0-9_.]{2,30}$/.test(bare)) {
-        const username = bare.replace(/^@/, '');
-        if (reserved[username.toLowerCase()] !== true) {
-          usernames.add(username);
-        }
-      }
-    }
-
-    return Array.from(usernames).map((username) => ({ username }));
-  }
-
-  const parsed: unknown = JSON.parse(raw);
-  let list: unknown[];
-
-  if (Array.isArray(parsed)) {
-    list = parsed;
-  } else if (
-    parsed &&
-    typeof parsed === 'object' &&
-    'accounts' in parsed &&
-    Array.isArray(parsed.accounts)
-  ) {
-    list = parsed.accounts;
-  } else {
-    throw new Error(
-      `The accounts file must contain an array or an object with an "accounts" array: ${filePath}`,
-    );
-  }
-
-  return list.map((entry) => {
-    if (typeof entry === 'string') {
-      return { username: entry };
-    }
-
-    if (
-      entry &&
-      typeof entry === 'object' &&
-      'username' in entry &&
-      typeof entry.username === 'string'
-    ) {
-      const note = 'note' in entry && typeof entry.note === 'string' ? entry.note : undefined;
-      return note === undefined ? { username: entry.username } : { username: entry.username, note };
-    }
-
-    throw new Error('Each account must be a username string or an object with a "username" field.');
-  });
-}
-
 async function main(): Promise<void> {
   const options = parseCliOptions(rootDirectory);
   setLogLevel(options.logLevel);
@@ -430,7 +354,7 @@ async function main(): Promise<void> {
       logger.debug(`Hybrid last result ${JSON.stringify(lastResult)}`);
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);
-      const accounts = loadBlockAccounts(options.accountsFile);
+      const accounts = parseAccountsFile(options.accountsFile);
       const result = await blockAccounts(page, accounts, translations, {
         accountDelay: options.blockDelay,
         confirmDelay: options.confirmDelay,

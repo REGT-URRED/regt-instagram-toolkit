@@ -72,6 +72,13 @@ npm run list:merge -- mis_bloqueados.html otra_lista.txt
 
 Extrae los usuarios, ignora duplicados y añade solo los nuevos. El bloqueo lee ese `.md` por defecto, salta lo ya procesado (`.state/block-ledger.jsonl`) y reintenta los fallos.
 
+Ver el estado de la lista en cualquier momento (sin abrir el navegador):
+
+```sh
+npm run list:count
+# Lista: 244 · bloqueadas 143 · ya bloqueadas 20 · fallos 23 · pendientes 58
+```
+
 ## Navegador
 
 `--browser auto` (por defecto) elige el primero instalado: Brave, Chrome, Edge, Chromium, Opera o Vivaldi. También puedes forzarlo: `--browser brave`, `--browser chrome`, `--browser edge`.

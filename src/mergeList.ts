@@ -3,52 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-
 const targetFile = path.resolve(
   process.env['REGT_LIST_FILE'] ?? './instagram_consolidado_ampliado.md',
 );
 const sources = process.argv.slice(2);
 
-const reserved: Record<string, true> = {
-  p: true,
-  reel: true,
-  reels: true,
-  explore: true,
-  accounts: true,
-  stories: true,
-  tv: true,
-  direct: true,
-  about: true,
-  legal: true,
-  developer: true,
-};
-
-function extractUsernames(text: string): Set<string> {
-  const found = new Set<string>();
-
-  for (const line of text.split(/\r?\n/)) {
-    for (const match of line.matchAll(/instagram\.com\/([A-Za-z0-9_.]+)/g)) {
-      const username = match[1]?.replace(/\.+$/, '');
-      if (username && reserved[username.toLowerCase()] !== true) {
-        found.add(username);
-      }
-    }
-
-    const bare = line
-      .replace(/#.*$/, '')
-      .replace(/^[-*]\s*/, '')
-      .replace(/^<|>$/g, '')
-      .trim();
-    if (/^@?[A-Za-z0-9_.]{2,30}$/.test(bare)) {
-      const username = bare.replace(/^@/, '');
-      if (reserved[username.toLowerCase()] !== true) {
-        found.add(username);
-      }
-    }
-  }
-
-  return found;
-}
+import { extractUsernames } from './instagram/block/accountList.js';
 
 if (sources.length === 0) {
   console.error('Uso: npm run list:merge -- archivo1 [archivo2...]');
@@ -56,7 +16,7 @@ if (sources.length === 0) {
 }
 
 const existingText = fs.existsSync(targetFile) ? fs.readFileSync(targetFile, 'utf8') : '';
-const existing = extractUsernames(existingText);
+const existing = new Set(extractUsernames(existingText));
 const added: string[] = [];
 let duplicates = 0;
 
