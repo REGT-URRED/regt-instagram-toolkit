@@ -1,4 +1,4 @@
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 import type { DateRange, TranslationDictionary } from '../types.js';
 import { waitForPageIdle } from '../browser/waits.js';
 import { getTranslationValues } from '../translations/loadTranslations.js';

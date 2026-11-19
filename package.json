@@ -17,7 +17,8 @@
     "likes": "npm run build --silent && node ./dist/cli.js --likes",
     "comments": "npm run build --silent && node ./dist/cli.js --comments",
     "block": "npm run build --silent && node ./dist/cli.js --block-accounts",
-    "clean": "rm -rf dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "reset": "node reset.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
@@ -34,7 +35,7 @@
   ],
   "license": "Unlicense",
   "dependencies": {
-    "puppeteer": "^24.9.0",
+    "puppeteer-core": "^24.43.1",
     "yargs": "^17.7.2"
   },
   "devDependencies": {

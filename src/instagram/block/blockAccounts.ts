@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 import { waitForDomReady, waitForPageIdle } from '../../browser/waits.js';
 import { logger } from '../../utils/logger.js';
 import type { BlockAccountEntry, BlockAccountsOptions, BlockAccountsResult } from '../../types.js';

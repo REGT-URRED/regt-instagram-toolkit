@@ -1,4 +1,4 @@
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 import type { CleanupOptions, TargetConfiguration, TranslationDictionary } from '../types.js';
 import { CleanupContext } from './cleanup/CleanupContext.js';
 import { CleanupRunner } from './cleanup/CleanupRunner.js';

@@ -1,4 +1,4 @@
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 import { waitForDomReady, waitForPageIdle } from '../browser/waits.js';
 import { logger } from '../utils/logger.js';
 import { hasVisibleLoginForm as hasVisibleLoginFormInBrowser } from './browser/hasVisibleLoginForm.js';

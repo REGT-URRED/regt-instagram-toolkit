@@ -1,0 +1,33 @@
+# Bitácora Histórica del Proyecto (Changelog)
+
+Registro metódico del progreso técnico, decisiones de arquitectura y evolución del sistema.
+
+---
+
+## Cambios Realizados
+
+- [2026-11-18] feat: list status command and shared account parser
+- [2026-11-18] feat: use the markdown list as the living block memory
+- [2026-11-18] docs: rewrite README for a one-minute start
+- [2026-11-18] feat: simple start menu and automatic browser selection
+- [2026-11-18] chore: ignore screenshots and temp artifacts
+- [2026-11-18] feat: resumable blocking for large lists
+- [2026-11-18] feat: adaptive batches, phase timings and blank-list wait
+- [2026-11-18] fix: bound the selection reload retry
+- [2026-11-18] perf: reuse one browser session across hybrid batches
+- [2026-11-18] docs: record measured selection speed
+- [2026-11-19] Implementación del sistema de memoria persistente `contextbase/` para agentes de código y desarrolladores.
+- [2026-11-19] feat: mejoras de usabilidad (flag `--no-store`/`--privacy`, `npm run reset`, `reset.js`, fix de `clean` para Windows)
+- [2026-11-19] feat: migración de dependencia `puppeteer` → `puppeteer-core` (package.json, package-lock sincronizado, `npm install`; 24.43.1 instalado)
+- [2026-11-19] docs: advertencias de `--use-system-profile`/`--no-sandbox` y tabla de qué almacena en README; mención de `--no-store` y `npm run reset`
+- [2026-11-19] docs: revisión read-only confirma comportamiento: sin exfiltración; almacena localmente (`.chrome-profile/`, `.state/*.jsonl`)
+
+---
+
+## Cambios por Hacer
+
+- Consolidar pruebas de funcionamiento y despliegue inicial.
+- Documentar guías de uso y endpoints principales.
+
+---
+*Nota: Registrar siempre cada nueva tarea completada en "Cambios Realizados" y actualizar los ítems pendientes en "Cambios por Hacer".*

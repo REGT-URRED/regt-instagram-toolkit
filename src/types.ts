@@ -68,6 +68,7 @@ export interface CliOptions {
   errorDialogTimeoutMs: number;
   dryRun: boolean;
   noSandbox: boolean;
+  noStore: boolean;
   logLevel: LogLevel;
   recoverOnError: boolean;
 }

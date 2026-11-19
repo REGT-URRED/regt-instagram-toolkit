@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 
 export interface CapabilityRule {
   role: string;
@@ -112,9 +112,7 @@ export async function invokeCapability(
       });
       // Instagram often exposes labels as StaticText, so prefer a role match but
       // accept a name-only match and climb to the nearest clickable ancestor.
-      const roleMatches = candidates.filter(
-        (node) => normalize(node.role?.value) === wantedRole,
-      );
+      const roleMatches = candidates.filter((node) => normalize(node.role?.value) === wantedRole);
       const pool = roleMatches.length > 0 ? roleMatches : candidates;
       const match = rule.preferLast ? pool.at(-1) : pool[0];
 

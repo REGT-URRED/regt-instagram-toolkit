@@ -38,6 +38,8 @@ interface RawArguments {
   errorDialogTimeout: number;
   dryRun: boolean;
   noSandbox: boolean;
+  noStore: boolean;
+  store?: boolean;
   logLevel: LogLevel;
   recoverOnError: boolean;
 }
@@ -154,6 +156,7 @@ function buildCliOptions(rootDirectory: string, argv: RawArguments): CliOptions 
     errorDialogTimeoutMs: argv.errorDialogTimeout,
     dryRun: argv.dryRun,
     noSandbox: argv.noSandbox,
+    noStore: argv.noStore || argv.store === false,
     logLevel: argv.logLevel,
     recoverOnError: argv.recoverOnError,
   };
@@ -226,7 +229,8 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
       type: 'string',
       choices: ['auto', 'brave', 'chrome', 'edge', 'chromium', 'opera', 'vivaldi'],
       default: 'auto',
-      describe: 'Browser to launch. auto picks the first installed one (Brave, Chrome, Edge, Chromium, Opera, Vivaldi).',
+      describe:
+        'Browser to launch. auto picks the first installed one (Brave, Chrome, Edge, Chromium, Opera, Vivaldi).',
     })
     .option('range', {
       type: 'string',
@@ -243,7 +247,7 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     })
     .option('batch-size', {
       type: 'string',
-      default: '90:99',
+      default: '20',
       describe:
         'Items selected per batch: fixed N or min:max for a random size per batch. Between 20 and 99; Instagram caps a cleanup at 100.',
     })
@@ -328,6 +332,19 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
       type: 'boolean',
       default: false,
       describe: 'Select one batch without confirming the cleanup action.',
+    })
+    .option('store', {
+      type: 'boolean',
+      default: true,
+      hidden: true,
+      describe: 'Internal switch behind --no-store.',
+    })
+    .option('no-store', {
+      type: 'boolean',
+      default: false,
+      alias: ['privacy'],
+      describe:
+        'Do not write the .state/ JSONL files (mutation payloads and ledgers). The run behaves the same but leaves no local trace. Alias: --privacy.',
     })
     .option('no-sandbox', {
       type: 'boolean',

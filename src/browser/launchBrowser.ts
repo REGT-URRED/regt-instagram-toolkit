@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import puppeteer, { type Browser, type Page } from 'puppeteer';
+import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 
 export interface BrowserSessionOptions {
   rootDir: string;
@@ -184,7 +184,8 @@ function getBrowserCandidates(): BrowserCandidate[] {
     fromEnvPath('PROGRAMFILES', ...segments);
   const programFilesX86 = (...segments: string[]): string | undefined =>
     fromEnvPath('PROGRAMFILES(X86)', ...segments);
-  const appData = (...segments: string[]): string | undefined => fromEnvPath('APPDATA', ...segments);
+  const appData = (...segments: string[]): string | undefined =>
+    fromEnvPath('APPDATA', ...segments);
   const home = (...segments: string[]): string => path.join(os.homedir(), ...segments);
   const clean = (values: Array<string | undefined>): string[] =>
     values.filter((value): value is string => Boolean(value));
@@ -290,11 +291,13 @@ function getBrowserCandidates(): BrowserCandidate[] {
   ];
 }
 
-function detectBrowser(preferred?: string): {
-  id: string;
-  executable: string | undefined;
-  userDataDir: string | undefined;
-} | undefined {
+function detectBrowser(preferred?: string):
+  | {
+      id: string;
+      executable: string | undefined;
+      userDataDir: string | undefined;
+    }
+  | undefined {
   const candidates = getBrowserCandidates();
   const selected =
     preferred && preferred !== 'auto'
@@ -365,11 +368,7 @@ function getDefaultProfileLocation(
   const localAppData = findWindowsLocalAppDataDir();
 
   if (isWslWindowsExecutable(executablePath) && localAppData) {
-    const userDataDir = path.win32.join(
-      localAppData,
-      'regt-instagram-toolkit',
-      'chrome-profile',
-    );
+    const userDataDir = path.win32.join(localAppData, 'regt-instagram-toolkit', 'chrome-profile');
     const filesystemUserDataDir = getWslFilesystemPathForWindowsPath(userDataDir);
 
     if (filesystemUserDataDir) {
@@ -413,11 +412,7 @@ function getWslWindowsRelativeProfileLocation(
     );
   }
 
-  const userDataDir = path.win32.join(
-    localAppData,
-    'regt-instagram-toolkit',
-    relativeDirectory,
-  );
+  const userDataDir = path.win32.join(localAppData, 'regt-instagram-toolkit', relativeDirectory);
   const filesystemUserDataDir = getWslFilesystemPathForWindowsPath(userDataDir);
 
   if (!filesystemUserDataDir) {
@@ -518,10 +513,14 @@ function resolveChromeExecutablePath(
 }
 
 export async function launchBrowser(options: BrowserSessionOptions): Promise<BrowserSession> {
-  const executablePath = resolveChromeExecutablePath(
-    options.chromeExecutablePath,
-    options.browser,
-  );
+  const executablePath = resolveChromeExecutablePath(options.chromeExecutablePath, options.browser);
+
+  if (!executablePath) {
+    throw new Error(
+      'No system browser found (Chrome/Chromium/Brave/Edge). Install one, or check --use-system-profile if you have one configured.',
+    );
+  }
+
   const { filesystemUserDataDir, profileDirectory, userDataDir } = resolveChromeProfileLocation(
     options.rootDir,
     options.profileDir,

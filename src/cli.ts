@@ -4,7 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Browser, Page } from 'puppeteer';
+import type { Browser, Page } from 'puppeteer-core';
 import { launchBrowser, type BrowserSessionOptions } from './browser/launchBrowser.js';
 import { waitForDomReady, waitForPageIdle } from './browser/waits.js';
 import { parseCliOptions } from './cli/parseCliOptions.js';
@@ -53,6 +53,7 @@ function logRunConfiguration(options: CliOptions): void {
   logger.debug(`Click delay: ${options.clickDelay.min}:${options.clickDelay.max} ms`);
   logger.debug(`Batch delay: ${options.batchDelay.min}:${options.batchDelay.max} ms`);
   logger.debug(`Recover on error: ${options.recoverOnError ? 'enabled' : 'disabled'}`);
+  logger.debug(`Local .state/ files: ${options.noStore ? 'disabled (--no-store)' : 'enabled'}`);
 }
 
 function buildBrowserSessionOptions(options: CliOptions): BrowserSessionOptions {
@@ -310,8 +311,12 @@ async function main(): Promise<void> {
             mode: options.modes.includes('comments') ? 'comments' : 'likes',
             limit: batchSize,
             dryRun: options.dryRun,
-            ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
-            mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
+            ...(options.noStore
+              ? {}
+              : {
+                  ledgerPath: path.join(rootDirectory, '.state/ledger.jsonl'),
+                  mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
+                }),
           });
           processed += result.processed;
           lastResult = result;
@@ -348,9 +353,7 @@ async function main(): Promise<void> {
         }
       }
 
-      logger.info(
-        `Total: ${processed} borrados en ${pass} lote(s). Último lote: ${batchSize}.`,
-      );
+      logger.info(`Total: ${processed} borrados en ${pass} lote(s). Último lote: ${batchSize}.`);
       logger.debug(`Hybrid last result ${JSON.stringify(lastResult)}`);
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);
@@ -360,8 +363,12 @@ async function main(): Promise<void> {
         confirmDelay: options.confirmDelay,
         limit: options.blockLimit,
         dryRun: options.blockDryRun,
-        ledgerPath: path.join(rootDirectory, '.state/block-ledger.jsonl'),
-        failuresPath: path.join(rootDirectory, '.state/block-failures.json'),
+        ...(options.noStore
+          ? {}
+          : {
+              ledgerPath: path.join(rootDirectory, '.state/block-ledger.jsonl'),
+              failuresPath: path.join(rootDirectory, '.state/block-failures.json'),
+            }),
       });
 
       logger.info(

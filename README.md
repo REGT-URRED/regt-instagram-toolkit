@@ -47,11 +47,11 @@ Solo pregunta cuántos por lote (Enter = 20). El navegador se detecta solo y la 
 
 ## Uso directo
 
-| Acción | Comando |
-|---|---|
-| Likes | `npm run likes` |
-| Comentarios | `npm run comments` |
-| Bloquear lista | `npm run block` |
+| Acción         | Comando            |
+| -------------- | ------------------ |
+| Likes          | `npm run likes`    |
+| Comentarios    | `npm run comments` |
+| Bloquear lista | `npm run block`    |
 
 Opciones útiles:
 
@@ -84,6 +84,30 @@ npm run list:count
 `--browser auto` (por defecto) elige el primero instalado: Brave, Chrome, Edge, Chromium, Opera o Vivaldi. También puedes forzarlo: `--browser brave`, `--browser chrome`, `--browser edge`.
 
 Si usas el perfil del sistema, cierra antes ese navegador. Sin `--profile-dir` se usa un perfil aislado del proyecto y se inicia sesión una vez.
+
+Ambos flags amplían la superficie de riesgo: `--use-system-profile` trabaja sobre tu perfil real de Chrome (misma sesión, cookies y extensiones), y `--no-sandbox` desactiva el sandbox del navegador. Úsalos solo si entiendes el trade-off.
+
+## Qué guarda en disco
+
+La herramienta escribe solo dentro del proyecto y nada de esto se sube al repo:
+
+| Ruta                         | Contenido                                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.chrome-profile/`           | Perfil de Chrome: sesión y cookies de Instagram. Contiene credenciales de sesión válidas.                                                                   |
+| `.state/mutations.jsonl`     | Payloads crudos de las mutaciones de like/unlike/delete/block/comment (hasta ~4 KB por línea). Cookies, CSRF, nonce y tokens se redactan antes de escribir. |
+| `.state/ledger.jsonl`        | Firmas de elementos ya procesados: `media_id`, URL y `aria-label`.                                                                                          |
+| `.state/block-ledger.jsonl`  | Cuentas ya bloqueadas, ya bloqueadas de antes, no encontradas o fallidas.                                                                                   |
+| `.state/block-failures.json` | Detalle de los bloqueos fallidos para reintentar.                                                                                                           |
+
+`--no-store` (alias `--privacy`) mantiene todo en memoria: el menú de likes/comentarios no escribe `.state/mutations.jsonl` ni `.state/ledger.jsonl`, y el bloqueo no escribe `.state/block-ledger.jsonl` ni el archivo de fallos. El `.chrome-profile/` se sigue creando porque es el navegador, no un registro de actividad.
+
+Para borrar todo el estado local de una vez:
+
+```sh
+npm run reset
+```
+
+Esto elimina `dist/`, `.state/` y `.chrome-profile/`.
 
 ## Qué verás
 

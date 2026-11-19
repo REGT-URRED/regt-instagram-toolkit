@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 import { waitForDomReady, waitForPageIdle } from '../browser/waits.js';
 import { BanGuard } from '../core/banGuard.js';
 import { invokeCapability, type CapabilitySet } from '../core/capabilities.js';
@@ -22,8 +22,8 @@ export interface HybridBatchOptions {
   mode: 'likes' | 'comments';
   limit: number;
   dryRun: boolean;
-  ledgerPath: string;
-  mutationsPath: string;
+  ledgerPath?: string;
+  mutationsPath?: string;
 }
 
 export interface HybridBatchResult {
@@ -40,7 +40,8 @@ export interface HybridBatchResult {
  * One measurable batch using the hybrid engine: accessibility capabilities for
  * controls, a stable-ID ledger, an AIMD rate governor and a ban guard, with the
  * existing text-based clicks as fallback. Mutation requests are recorded for a
- * future replay path; replay itself stays disabled here.
+ * future replay path; replay itself stays disabled here. When the ledger and
+ * mutation paths are omitted (--no-store) both stay in memory / are skipped.
  */
 export async function runHybridBatch(
   page: Page,
@@ -166,8 +167,7 @@ export async function runHybridBatch(
       const labels = Array.from(
         document.querySelectorAll('button,[role="button"],div,span'),
       ).filter(
-        (element) =>
-          isVisible(element) && (element as HTMLElement).innerText.trim() === 'Eliminar',
+        (element) => isVisible(element) && (element as HTMLElement).innerText.trim() === 'Eliminar',
       );
       return {
         rows: document.querySelectorAll('[data-testid="post_collection_item"]').length,
@@ -293,8 +293,7 @@ export async function runHybridBatch(
         preferLast: true,
         debugName: 'Cleanup action',
       });
-  const acted =
-    actedByDom || actedByLabel || (await invokeCapability(page, actionRule, 6_000));
+  const acted = actedByDom || actedByLabel || (await invokeCapability(page, actionRule, 6_000));
   timings.actionMs = Date.now() - actionStartedAt;
   if (debugEnabled) {
     logger.info(`[hybrid][debug] action label=${actedByLabel} capability=${!actedByLabel}`);
@@ -419,7 +418,13 @@ export async function runHybridBatch(
   logger.debug(
     `[hybrid] timings goto=${timings.gotoMs ?? 0}ms list=${timings.listWaitMs ?? 0}ms select=${timings.selectModeMs ?? 0}ms selection=${timings.selectionMs ?? 0}ms action=${timings.actionMs ?? 0}ms confirm=${timings.confirmMs ?? 0}ms mutation=${timings.mutationMs ?? 0}ms`,
   );
-  logger.info(`[hybrid] Recorded ${ledger.size} stable id(s) in the ledger.`);
+  if (options.ledgerPath) {
+    logger.info(`[hybrid] Recorded ${ledger.size} stable id(s) in the ledger.`);
+  } else {
+    logger.info(
+      `[hybrid] Privacy mode: ${ledger.size} processed id(s) kept in memory, no ledger or mutation file written.`,
+    );
+  }
   return buildResult({ clicked, startedAt, governor, guard, ledger, banSignals, options });
 }
 
@@ -462,17 +467,13 @@ async function activateSelectMode(page: Page, labels: string[]): Promise<boolean
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0;
     };
-    const matches = Array.from(
-      document.querySelectorAll('div,span,button,[role="button"]'),
-    ).filter(
+    const matches = Array.from(document.querySelectorAll('div,span,button,[role="button"]')).filter(
       (element) =>
         isVisible(element) &&
         normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
     );
     const target = matches.at(-1);
-    const clickable = target
-      ? (target.closest('button,[role="button"]') ?? target)
-      : null;
+    const clickable = target ? (target.closest('button,[role="button"]') ?? target) : null;
     (clickable as HTMLElement | null)?.click();
     return Boolean(clickable);
   }, words);
@@ -508,9 +509,7 @@ async function clickActionByDom(page: Page, labels: string[]): Promise<boolean> 
         style.display !== 'none'
       );
     };
-    const matches = Array.from(
-      document.querySelectorAll('div,span,button,[role="button"]'),
-    ).filter(
+    const matches = Array.from(document.querySelectorAll('div,span,button,[role="button"]')).filter(
       (element) =>
         isVisible(element) &&
         normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
@@ -529,9 +528,7 @@ async function clickDialogConfirm(page: Page, labels: string[]): Promise<boolean
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0;
     };
-    const candidates = Array.from(
-      document.querySelectorAll('button,[role="button"],div,span'),
-    )
+    const candidates = Array.from(document.querySelectorAll('button,[role="button"],div,span'))
       .filter(
         (element) =>
           visible(element) &&

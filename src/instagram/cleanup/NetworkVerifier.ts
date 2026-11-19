@@ -1,4 +1,4 @@
-import type { HTTPRequest, HTTPResponse } from 'puppeteer';
+import type { HTTPRequest, HTTPResponse } from 'puppeteer-core';
 import type { CleanupContext } from './CleanupContext.js';
 import type { InstagramMutationResult } from './types.js';
 

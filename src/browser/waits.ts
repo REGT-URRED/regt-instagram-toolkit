@@ -1,4 +1,4 @@
-import type { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 
 export async function waitForDomReady(page: Page, timeout = 30_000): Promise<void> {
   await page.waitForFunction(isDomReady, { timeout });
