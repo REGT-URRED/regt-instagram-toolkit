@@ -108,6 +108,7 @@ export class CleanupRunner {
         if (remainingAfterRefresh.length > 0) {
           this.handlePossibleThrottle(remainingAfterRefresh);
           this.abortIfInstagramIsThrottling();
+          this.context.armLeadingSkip();
           continue;
         }
       }
@@ -197,6 +198,7 @@ export class CleanupRunner {
 
     await waitForDomReady(this.context.page, 90_000);
     await waitForPageIdle(this.context.page, 15_000, 1_000);
+    this.context.armLeadingSkip();
   }
 
   private handlePossibleThrottle(remainingSignatures: string[]): void {

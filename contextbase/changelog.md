@@ -5,6 +5,10 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: el primer ítem de la grilla de likes (tile negro no disponible) ya no se selecciona nunca, desde el primer lote y en todos los siguientes, porque Instagram rechaza el lote entero
+- [2026-11-19] fix: la selección descarta candidatos sin firma (sin link, imagen ni texto), que son los tiles rotos que hacen fallar la eliminación
+- [2026-11-19] fix: tras un lote exitoso el salto vuelve a 1 (solo el tile negro), para no saltear likes válidos de más
+- [2026-11-19] [commit] 438ca32 chore: actualizar memoria contextbase
 - [2026-11-19] [commit] 48c3133 fix: skip black unavailable tile and stop on instagram throttle
 - [2026-11-19] fix: el salto de elementos rechazados ahora es posicional (ignora el primer tile de la lista) en vez de por firma; el tile negro sin link ni imagen no generaba firma y por eso se marcaba el elemento equivocado y el lote volvía a fallar siempre
 - [2026-11-19] fix: el salto posicional se aplica solo al primer lote tras recargar la página (no en cada scroll), así no se saltean likes válidos

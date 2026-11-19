@@ -20,7 +20,10 @@ export class SelectionManager {
 
   public async selectBatch(targetCount: number): Promise<SelectionResult> {
     let selection = this.emptySelection();
-    let leadingSkipCount = this.context.leadingSkipCount;
+    // The likes grid keeps a black, unavailable tile as its first item on every
+    // batch, so the first visible item is never selected.
+    this.context.armLeadingSkip();
+    let leadingSkipCount = this.context.consumeLeadingSkipCount();
 
     for (let pass = 0; pass < maxSelectionPasses && selection.count < targetCount; pass += 1) {
       const previousCount = selection.count;

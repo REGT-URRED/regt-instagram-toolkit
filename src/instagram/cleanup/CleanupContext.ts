@@ -24,7 +24,10 @@ export class CleanupContext {
   public lastMutation: InstagramMutationResult | null = null;
   private throttleCooldownMs = 0;
   private consecutiveThrottleSignals = 0;
-  private leadingItemsToSkip = 0;
+  // The first item of the likes grid is an unavailable black tile that makes
+  // Instagram reject the whole batch, so it is never selected.
+  private leadingItemsToSkip = 1;
+  private leadingSkipArmed = true;
   private consecutiveSkippedKeys = 0;
   private pendingThrottleCooldownWaitMs = 0;
 
@@ -84,10 +87,20 @@ export class CleanupContext {
   public increaseLeadingSkip(): number {
     this.leadingItemsToSkip += 1;
     this.consecutiveSkippedKeys += 1;
+    this.leadingSkipArmed = true;
     return this.leadingItemsToSkip;
   }
 
-  public get leadingSkipCount(): number {
+  public armLeadingSkip(): void {
+    this.leadingSkipArmed = true;
+  }
+
+  public consumeLeadingSkipCount(): number {
+    if (!this.leadingSkipArmed) {
+      return 0;
+    }
+
+    this.leadingSkipArmed = false;
     return this.leadingItemsToSkip;
   }
 
@@ -97,6 +110,7 @@ export class CleanupContext {
 
   public resetSkippedKeyCounter(): void {
     this.consecutiveSkippedKeys = 0;
+    this.leadingItemsToSkip = 1;
   }
 
   public recordThrottleSignal(): number {

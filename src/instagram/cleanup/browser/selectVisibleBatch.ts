@@ -52,6 +52,7 @@ export function collectNextVisibleBatchTarget({
 
     private isSelectableCandidate(element: Element): boolean {
       return (
+        this.getItemSignature(element) !== null &&
         !this.ignored.has(this.getCandidateKey(element)) &&
         this.isVisible(element) &&
         this.isInMainViewport(element) &&
