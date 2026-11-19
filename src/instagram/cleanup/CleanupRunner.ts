@@ -1,11 +1,15 @@
+import { waitForDomReady, waitForPageIdle } from '../../browser/waits.js';
 import type { CleanupContext } from './CleanupContext.js';
 import { BatchActionRunner } from './BatchActionRunner.js';
+import { InstagramThrottledError } from '../errors.js';
 import { PostVisibilityVerifier } from './PostVisibilityVerifier.js';
 import { ScrollManager } from './ScrollManager.js';
 import { SelectionManager } from './SelectionManager.js';
 import { SelectModeController } from './SelectModeController.js';
 
 const selectedItemsDisappearTimeoutMs = 60_000;
+const maxConsecutiveThrottleSignals = 3;
+const maxConsecutiveSkippedItems = 3;
 
 export class CleanupRunner {
   private readonly actionRunner: BatchActionRunner;
@@ -31,11 +35,14 @@ export class CleanupRunner {
 
       await this.waitBeforeNextBatchIfThrottled();
 
+      this.context.notifyPhase('select', 'buscando el botón Seleccionar');
       await this.selectModeController.ensure();
+      this.context.notifyPhase('select', 'seleccionando elementos');
       const selection = await this.selectionManager.selectBatch(this.context.pickBatchSize());
 
       if (selection.count === 0) {
         this.context.markEmptyPass();
+        this.context.notifyPhase('wait', 'buscando más elementos');
         const scroll = await this.scrollManager.scrollMore();
 
         if (this.context.emptyPasses >= 3 || scroll.before === scroll.after) {
@@ -49,6 +56,7 @@ export class CleanupRunner {
 
       this.context.resetEmptyPasses();
       this.context.debug(`Selected batch: ${selection.count} item(s).`);
+      this.context.notifyPhase('delete', `eliminando ${selection.count} elemento(s)`);
 
       if (selection.attemptedCount > selection.count) {
         this.context.warn(
@@ -68,6 +76,25 @@ export class CleanupRunner {
 
       const actionResult = await this.actionRunner.run();
       if (actionResult.status === 'recovered-error-dialog') {
+        const leadingSkipCount = this.context.increaseLeadingSkip();
+
+        if (this.context.consecutiveSkippedKeyCount >= maxConsecutiveSkippedItems) {
+          throw new InstagramThrottledError(
+            `Instagram rejected ${this.context.consecutiveSkippedKeyCount} batches in a row even while skipping the first items (${this.context.totalProcessed} successful action(s)). ` +
+              'Either several posts are unavailable or the account is temporarily throttled; wait a while before retrying.',
+            true,
+          );
+        }
+
+        this.context.warn(
+          `Instagram rejected this batch. Skipping the first ${leadingSkipCount} item(s) of the activity list (the black/unavailable tile at the top breaks the request) and continuing with the rest.`,
+        );
+        this.context.notifyPhase(
+          'wait',
+          `saltando ${leadingSkipCount} elemento(s) rechazado(s) · acumulado ${this.context.totalProcessed}`,
+        );
+        await this.delay(2_000);
+        await this.reloadActivityPage();
         continue;
       }
 
@@ -80,12 +107,16 @@ export class CleanupRunner {
 
         if (remainingAfterRefresh.length > 0) {
           this.handlePossibleThrottle(remainingAfterRefresh);
+          this.abortIfInstagramIsThrottling();
           continue;
         }
       }
 
       const processed = actionResult.count ?? selection.count;
       this.context.addProcessed(processed);
+      this.context.resetSkippedKeyCounter();
+      this.context.resetThrottleSignals();
+      this.context.notifyPhase('done', `lote completado: ${processed}`);
       this.reduceThrottleCooldownAfterSuccess();
       this.context.info(
         `Processed batch: ${processed} item(s). Total processed: ${this.context.totalProcessed}.`,
@@ -110,6 +141,7 @@ export class CleanupRunner {
     }
 
     this.context.debug(`Waiting ${delay} ms before the next batch.`);
+    this.context.notifyPhase('wait', `esperando ${Math.round(delay / 1000)}s antes del siguiente lote`);
     await this.delay(delay);
   }
 
@@ -123,7 +155,48 @@ export class CleanupRunner {
     this.context.warn(
       `Waiting ${this.formatDuration(cooldown)} before the next cleanup batch because Instagram looked throttled.`,
     );
+    this.context.notifyPhase('wait', `esperando ${this.formatDuration(cooldown)} por throttling`);
     await this.delay(cooldown);
+  }
+
+  private abortIfInstagramIsThrottling(): void {
+    const signals = this.context.recordThrottleSignal();
+    if (signals < maxConsecutiveThrottleSignals) {
+      return;
+    }
+
+    throw new InstagramThrottledError(
+      `Instagram rejected ${signals} batches in a row (${this.context.totalProcessed} item(s) processed before the limit). ` +
+        'This is a temporary Instagram limit, not a tool failure. Wait between 1 and 24 hours before retrying, ' +
+        'and use a slower batch rhythm when you come back.',
+    );
+  }
+
+  private async waitForThrottleAndReload(): Promise<void> {
+    const cooldown = this.context.increaseThrottleCooldown();
+    this.context.warn(
+      `Instagram displayed its error dialog without a specific item to skip. Waiting ${this.formatDuration(cooldown)} because the account looks throttled.`,
+    );
+    this.context.notifyPhase('wait', `esperando ${this.formatDuration(cooldown)} por throttling`);
+    await this.delay(cooldown);
+    await this.reloadActivityPage();
+  }
+
+  private async reloadActivityPage(): Promise<void> {
+    try {
+      await this.context.page.reload({ waitUntil: 'domcontentloaded', timeout: 90_000 });
+    } catch (error) {
+      this.context.warn(
+        `Page refresh did not settle cleanly: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      await this.context.page.goto(this.context.target.url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 90_000,
+      });
+    }
+
+    await waitForDomReady(this.context.page, 90_000);
+    await waitForPageIdle(this.context.page, 15_000, 1_000);
   }
 
   private handlePossibleThrottle(remainingSignatures: string[]): void {

@@ -9,6 +9,7 @@ import { RateGovernor, type RateGovernorSnapshot } from '../core/rateGovernor.js
 import { clickByLabels } from '../instagram/clickByLabels.js';
 import { selectBatchInPage } from '../instagram/cleanup/browser/selectVisibleBatch.js';
 import { getCheckboxCandidateSelector } from '../instagram/cleanup/selectors.js';
+import { InstagramThrottledError } from '../instagram/errors.js';
 import { getTranslationValues } from '../translations/loadTranslations.js';
 import type { TranslationDictionary } from '../types.js';
 import { logger } from '../utils/logger.js';
@@ -406,6 +407,17 @@ export async function runHybridBatch(
     }
     await debugState('after-confirm');
     if (!confirmed) {
+      if (await dismissInstagramErrorDialog(page)) {
+        banSignals += 1;
+        const decision = guard.record();
+        governor.recordBan();
+        logger.warn(
+          `[hybrid] Instagram displayed an error dialog instead of the confirmation. Level=${decision}, signals=${banSignals}.`,
+        );
+        throw new InstagramThrottledError(
+          'Instagram rejected the action with its error dialog (temporary limit on likes/comment removal).',
+        );
+      }
       throw new Error('The cleanup confirmation control was not found.');
     }
 
@@ -446,8 +458,9 @@ export async function runHybridBatch(
     logger.warn(`[hybrid] Ban signal (UI text). Level=${decision}, signals=${banSignals}.`);
 
     if (decision === 'abort') {
-      throw new Error(
-        `Aborting to protect the account: ${banSignals} ban signals in the window. Wait before retrying.`,
+      throw new InstagramThrottledError(
+        `Aborting to protect the account: ${banSignals} ban signals in the window. Wait at least a few hours before retrying.`,
+        true,
       );
     }
     if (decision === 'pause') {

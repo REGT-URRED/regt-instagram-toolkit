@@ -4,6 +4,7 @@ import { controlTranslationKeys } from '../../translations/defaultTranslations.j
 import { getTranslationValues } from '../../translations/loadTranslations.js';
 import { logger } from '../../utils/logger.js';
 import { normalizeText } from '../../utils/text.js';
+import type { ProgressPhase } from '../../utils/progress.js';
 import type { CleanupToastResult, InstagramMutationResult, SelectionResult } from './types.js';
 
 const throttleCooldownStepMs = 60_000;
@@ -22,6 +23,9 @@ export class CleanupContext {
   public lastToast: CleanupToastResult | null = null;
   public lastMutation: InstagramMutationResult | null = null;
   private throttleCooldownMs = 0;
+  private consecutiveThrottleSignals = 0;
+  private leadingItemsToSkip = 0;
+  private consecutiveSkippedKeys = 0;
   private pendingThrottleCooldownWaitMs = 0;
 
   public constructor(
@@ -77,6 +81,37 @@ export class CleanupContext {
     return cooldown;
   }
 
+  public increaseLeadingSkip(): number {
+    this.leadingItemsToSkip += 1;
+    this.consecutiveSkippedKeys += 1;
+    return this.leadingItemsToSkip;
+  }
+
+  public get leadingSkipCount(): number {
+    return this.leadingItemsToSkip;
+  }
+
+  public get consecutiveSkippedKeyCount(): number {
+    return this.consecutiveSkippedKeys;
+  }
+
+  public resetSkippedKeyCounter(): void {
+    this.consecutiveSkippedKeys = 0;
+  }
+
+  public recordThrottleSignal(): number {
+    this.consecutiveThrottleSignals += 1;
+    return this.consecutiveThrottleSignals;
+  }
+
+  public resetThrottleSignals(): void {
+    this.consecutiveThrottleSignals = 0;
+  }
+
+  public get throttleSignalCount(): number {
+    return this.consecutiveThrottleSignals;
+  }
+
   public increaseThrottleCooldown(): number {
     this.throttleCooldownMs = Math.min(
       maxThrottleCooldownMs,
@@ -95,6 +130,10 @@ export class CleanupContext {
     );
 
     return this.throttleCooldownMs;
+  }
+
+  public notifyPhase(phase: ProgressPhase, message: string, details?: string): void {
+    this.options.onPhase?.(phase, message, details ?? `acumulado ${this.totalProcessed}`);
   }
 
   public debug(message: string): void {

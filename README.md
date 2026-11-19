@@ -43,7 +43,7 @@ Menú de una pantalla:
 4) Salir
 ```
 
-Solo pregunta el máximo por lote (Enter = 20); cada lote usa un tamaño aleatorio entre 20 y ese máximo. El navegador se detecta solo y la ventana se cierra al terminar.
+Pregunta el navegador (una sola tecla, sin Enter: `a` automático, `b` Brave, `c` Chrome, `e` Edge, `o` Opera, `v` Vivaldi), si usas tu perfil real y el máximo por lote (Enter = 20); cada lote usa un tamaño aleatorio entre 20 y ese máximo. La ventana se cierra al terminar.
 
 ## Uso directo
 

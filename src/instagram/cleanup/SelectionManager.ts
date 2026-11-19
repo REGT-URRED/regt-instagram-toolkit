@@ -20,10 +20,15 @@ export class SelectionManager {
 
   public async selectBatch(targetCount: number): Promise<SelectionResult> {
     let selection = this.emptySelection();
+    let leadingSkipCount = this.context.leadingSkipCount;
 
     for (let pass = 0; pass < maxSelectionPasses && selection.count < targetCount; pass += 1) {
       const previousCount = selection.count;
-      const visibleSelection = await this.selectVisibleBatch(targetCount - selection.count);
+      const visibleSelection = await this.selectVisibleBatch(
+        targetCount - selection.count,
+        leadingSkipCount,
+      );
+      leadingSkipCount = 0;
       selection = this.mergeSelection(selection, visibleSelection);
 
       if (selection.count >= targetCount) {
@@ -49,7 +54,10 @@ export class SelectionManager {
     return selection;
   }
 
-  private async selectVisibleBatch(batchSize: number): Promise<SelectionResult> {
+  private async selectVisibleBatch(
+    batchSize: number,
+    skipLeadingCount: number,
+  ): Promise<SelectionResult> {
     let attemptedCount = 0;
     const attemptedKeys: string[] = [];
 
@@ -58,6 +66,7 @@ export class SelectionManager {
         checkboxSelector: getCheckboxCandidateSelector(),
         controlText: this.context.controlText,
         ignoredKeys: attemptedKeys,
+        skipLeadingCount: attemptedKeys.length === 0 ? skipLeadingCount : 0,
       });
 
       if (!target) {

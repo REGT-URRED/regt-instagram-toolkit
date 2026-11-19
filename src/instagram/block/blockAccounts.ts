@@ -59,6 +59,7 @@ export async function blockAccounts(
 
     processed += 1;
     const counter = `${processed}/${accounts.length}`;
+    options.onPhase?.('select', `@${username}`, `${result.blocked} bloqueadas · ${counter}`);
     try {
       await page.goto(`https://www.instagram.com/${encodeURIComponent(username)}/`, {
         waitUntil: 'domcontentloaded',
@@ -99,6 +100,7 @@ export async function blockAccounts(
         continue;
       }
 
+      options.onPhase?.('confirm', `bloqueando @${username}`, `${result.blocked} bloqueadas · ${counter}`);
       const opened = await clickByLabels(page, optionsLabels, {
         timeout: 6_000,
         debugName: 'Profile options',
@@ -134,10 +136,12 @@ export async function blockAccounts(
       await waitForBlockedState(page, unblockLabels);
       result.blocked += 1;
       recordBlock(ledger, options.ledgerPath, username, 'blocked');
+      options.onPhase?.('done', `@${username} bloqueada`, `${result.blocked} bloqueadas · ${counter}`);
       logger.info(`[${counter}] @${username}: bloqueada`);
     } catch (error) {
       result.failed += 1;
       const message = error instanceof Error ? error.message : String(error);
+      options.onPhase?.('error', `@${username} falló`, `${result.failed} fallos · ${counter}`);
       failures.push({ username, error: message });
       recordBlock(ledger, options.ledgerPath, username, 'failed');
       logger.error(`[${counter}] @${username}: fallo (${message})`);

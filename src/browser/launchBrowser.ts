@@ -319,6 +319,10 @@ function detectBrowser(preferred?: string):
   );
 }
 
+export function detectBrowserId(preferred?: string): string | undefined {
+  return detectBrowser(preferred)?.id;
+}
+
 export function detectBrowserName(preferred?: string): string | undefined {
   const detected = detectBrowser(preferred);
   if (!detected) {

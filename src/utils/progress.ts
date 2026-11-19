@@ -20,10 +20,7 @@ const phaseFrames: Record<ProgressPhase, string[]> = {
 };
 
 const intervalMs = 140;
-
-// Siempre habilitado para que el usuario vea la animación en cualquier terminal
-const isWindows = process.platform === 'win32';
-const clearLine = isWindows ? '\r' : '\r\x1b[2K';
+const trailingPadding = '        ';
 
 export class ShruggieProgress {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -31,13 +28,20 @@ export class ShruggieProgress {
   private phase: ProgressPhase = 'prepare';
   private message = '';
   private details = '';
-  private readonly enabled = true;
+  private lastStaticLine = '';
+  private readonly animated = Boolean(process.stdout.isTTY);
 
   public start(message: string, details = ''): void {
     this.message = message;
     this.details = details;
     this.phase = 'prepare';
     this.frameIndex = 0;
+
+    if (!this.animated) {
+      this.writeStatic();
+      return;
+    }
+
     this.render();
 
     if (this.timer) {
@@ -59,7 +63,13 @@ export class ShruggieProgress {
     if (details !== undefined) {
       this.details = details;
     }
-    this.render();
+
+    if (this.animated) {
+      this.render();
+      return;
+    }
+
+    this.writeStatic();
   }
 
   public stop(message?: string, details?: string): void {
@@ -68,17 +78,40 @@ export class ShruggieProgress {
       this.timer = null;
     }
 
-    const frame = phaseFrames[this.phase][0] ?? '';
     const finalMessage = message ?? this.message;
     const finalDetails = details ?? this.details;
+
+    if (!this.animated) {
+      const line = this.buildLine(finalMessage, finalDetails);
+      if (line !== this.lastStaticLine) {
+        process.stdout.write(`${line}\n`);
+        this.lastStaticLine = line;
+      }
+      return;
+    }
+
+    const frame = phaseFrames[this.phase][0] ?? '';
     const line = [frame, finalMessage, finalDetails].filter(Boolean).join('  ');
-    process.stdout.write(`${clearLine}${line}\n`);
+    process.stdout.write(`\r${line}${trailingPadding}\n`);
+  }
+
+  private buildLine(message = this.message, details = this.details): string {
+    const frames = phaseFrames[this.phase];
+    const frame = frames[this.frameIndex % frames.length] ?? '';
+    return [frame, message, details].filter(Boolean).join('  ');
+  }
+
+  private writeStatic(): void {
+    const line = this.buildLine();
+    if (line === this.lastStaticLine) {
+      return;
+    }
+
+    this.lastStaticLine = line;
+    process.stdout.write(`${line}\n`);
   }
 
   private render(): void {
-    const frames = phaseFrames[this.phase];
-    const frame = frames[this.frameIndex % frames.length] ?? '';
-    const line = [frame, this.message, this.details].filter(Boolean).join('  ');
-    process.stdout.write(`${clearLine}${line}`);
+    process.stdout.write(`\r${this.buildLine()}${trailingPadding}`);
   }
 }

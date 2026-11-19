@@ -13,6 +13,7 @@ import { blockAccounts } from './instagram/block/blockAccounts.js';
 import { parseAccountsFile } from './instagram/block/accountList.js';
 import { cleanupHistory } from './instagram/cleanup.js';
 import { applyDateFilter } from './instagram/dateFilter.js';
+import { InstagramThrottledError } from './instagram/errors.js';
 import { waitForInstagramLogin } from './instagram/session.js';
 import { buildTarget } from './instagram/targets.js';
 import { runHybridBatch } from './prototype/hybridBatch.js';
@@ -23,6 +24,7 @@ import type {
   TargetConfiguration,
   TranslationDictionary,
 } from './types.js';
+import { enableUtf8Console } from './utils/consoleEncoding.js';
 import { configureDesktopNotifications, notifyCleanupDone } from './utils/desktopNotification.js';
 import { logger, setLogLevel } from './utils/logger.js';
 import { ShruggieProgress } from './utils/progress.js';
@@ -175,18 +177,30 @@ async function runCleanupJob(
   options: CliOptions,
 ): Promise<number> {
   const { page, target } = job;
+  const progress = new ShruggieProgress();
 
-  logger.info(`[${target.mode}] Opening activity page.`);
-  await page.bringToFront();
-  await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await waitForDomReady(page);
-  await waitForPageIdle(page, 3_000, 500);
-  await applyDateFilter(page, options.range, translations);
+  try {
+    logger.info(`[${target.mode}] Opening activity page.`);
+    progress.start(`preparando ${target.mode}`, 'acumulado 0');
+    progress.setPhase('wait', 'abriendo la página de actividad');
+    await page.bringToFront();
+    await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await waitForDomReady(page);
+    await waitForPageIdle(page, 3_000, 500);
+    await applyDateFilter(page, options.range, translations);
 
-  const total = await cleanupHistory(page, target, translations, buildCleanupOptions(options));
+    const total = await cleanupHistory(page, target, translations, {
+      ...buildCleanupOptions(options),
+      onPhase: (phase, message, details) => progress.setPhase(phase, message, details),
+    });
 
-  logger.info(`[${target.mode}] Done. Selected/processed items: ${total}.`);
-  return total;
+    progress.stop(`OK ${target.mode}: ${total}`, `acumulado ${total}`);
+    logger.info(`[${target.mode}] Done. Selected/processed items: ${total}.`);
+    return total;
+  } catch (error) {
+    progress.stop(`ERROR en ${target.mode}`, '');
+    throw error;
+  }
 }
 
 async function runCleanupJobs(
@@ -217,6 +231,12 @@ async function runCleanupLoop(
       logger.info(`Done. Total selected/processed items: ${total}.`);
       return true;
     } catch (error) {
+      if (error instanceof InstagramThrottledError) {
+        logger.error(`Error: ${error.message}`);
+        process.exitCode = 1;
+        return false;
+      }
+
       if (!options.recoverOnError) {
         logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
         process.exitCode = 1;
@@ -270,6 +290,7 @@ function delay(durationMs: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  enableUtf8Console();
   const options = parseCliOptions(rootDirectory);
   setLogLevel(options.logLevel);
   configureDesktopNotifications({ prompts: options.notifyPrompts, done: options.notifyDone });
@@ -349,11 +370,12 @@ async function main(): Promise<void> {
         } catch (error) {
           progress.stop('ERROR en el lote', `lote ${batchSize}`);
           failures += 1;
-          if (failures >= 3) {
+          if (failures >= 3 || (error instanceof InstagramThrottledError && error.fatal)) {
             throw error;
           }
           batchCeiling = Math.min(batchCeiling, Math.max(minBatch, batchSize - 1));
-          const cooldown = 8_000 * failures;
+          const throttled = error instanceof InstagramThrottledError;
+          const cooldown = Math.min(300_000, (throttled ? 60_000 : 8_000) * failures);
           logger.warn(
             `[hybrid] Pass failed; batch ceiling ${batchCeiling}, retrying in ${cooldown / 1000}s (${String(error)})`,
           );
@@ -366,18 +388,31 @@ async function main(): Promise<void> {
     } else if (options.blockAccounts) {
       await waitForInstagramLogin(page, options.loginTimeout);
       const accounts = parseAccountsFile(options.accountsFile);
-      const result = await blockAccounts(page, accounts, translations, {
-        accountDelay: options.blockDelay,
-        confirmDelay: options.confirmDelay,
-        limit: options.blockLimit,
-        dryRun: options.blockDryRun,
-        ...(options.noStore
-          ? {}
-          : {
-              ledgerPath: path.join(rootDirectory, '.state/block-ledger.jsonl'),
-              failuresPath: path.join(rootDirectory, '.state/block-failures.json'),
-            }),
-      });
+      const progress = new ShruggieProgress();
+      progress.start('preparando bloqueo', `0/${accounts.length}`);
+      let result: Awaited<ReturnType<typeof blockAccounts>>;
+      try {
+        result = await blockAccounts(page, accounts, translations, {
+          accountDelay: options.blockDelay,
+          confirmDelay: options.confirmDelay,
+          limit: options.blockLimit,
+          dryRun: options.blockDryRun,
+          onPhase: (phase, message, details) => progress.setPhase(phase, message, details),
+          ...(options.noStore
+            ? {}
+            : {
+                ledgerPath: path.join(rootDirectory, '.state/block-ledger.jsonl'),
+                failuresPath: path.join(rootDirectory, '.state/block-failures.json'),
+              }),
+        });
+      } catch (error) {
+        progress.stop('ERROR en bloqueo', '');
+        throw error;
+      }
+      progress.stop(
+        `OK bloqueo: ${result.blocked} bloqueadas`,
+        `${result.alreadyBlocked} ya estaban · ${result.failed} fallos`,
+      );
 
       logger.info(
         `Block summary: ${result.blocked} blocked, ${result.alreadyBlocked} already blocked, ${result.wouldBlock} would block, ${result.skipped} skipped, ${result.notFound} not found, ${result.failed} failed.`,

@@ -5,6 +5,17 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: el salto de elementos rechazados ahora es posicional (ignora el primer tile de la lista) en vez de por firma; el tile negro sin link ni imagen no generaba firma y por eso se marcaba el elemento equivocado y el lote volvía a fallar siempre
+- [2026-11-19] fix: el salto posicional se aplica solo al primer lote tras recargar la página (no en cada scroll), así no se saltean likes válidos
+- [2026-11-19] feat: si Instagram rechaza un lote, la limpieza ahora salta el primer elemento seleccionado (carrusel o publicación no disponible) y continúa desde el siguiente en vez de fallar el lote entero; tras 3 rechazos seguidos se detiene y avisa
+- [2026-11-19] fix: la limpieza se detiene con mensaje claro tras 3 lotes rechazados seguidos por Instagram (límite temporal de likes/comentarios) en vez de reintentar sin fin; cierra el navegador, sale con código 1 y explica cuánto esperar
+- [2026-11-19] fix: el flujo híbrido detecta el diálogo de error de Instagram antes de buscar la confirmación (antes fallaba con "confirmation control was not found" y reintentaba en vano)
+- [2026-11-19] fix: el bucle de recuperación clásico ya no reintenta cuando el error es un límite de Instagram (antes podía quedar girando indefinidamente)
+- [2026-11-19] fix: menú reescrito sin conflicto readline/raw-mode (las respuestas ya no se corren de lugar: navegador de una letra con enter automático y preguntas posteriores correctas)
+- [2026-11-19] fix: consola Windows en UTF-8 (chcp 65001 en iniciar.cmd + runtime) para que la animación Shruggie se vea bien
+- [2026-11-19] feat: animación Shruggie también en limpieza de likes y bloqueo de cuentas (antes solo en comentarios)
+- [2026-11-19] fix: flujo clásico de likes ahora detecta el diálogo de error en español ("Se produjo un error"/"Hubo un problema") y pulsa "Aceptar"
+- [2026-11-19] [commit] 40cf57b chore: actualizar changelog con fix batch-size 100
 - [2026-11-19] fix: batch-size tope subido de 99 a 100 para que máximo 100 no falle al parsear --batch-size 20:100
 - [2026-11-19] [commit] f646b1a fix: batch-size tope 100 para no fallar con máximo 100
 - [2026-11-19] [commit] 8b863af chore: actualizar changelog

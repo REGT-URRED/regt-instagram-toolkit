@@ -8,6 +8,7 @@ export interface SelectVisibleBatchInput {
   checkboxSelector: string;
   controlText: string[];
   ignoredKeys?: string[];
+  skipLeadingCount?: number;
 }
 
 export interface SelectionTargetInput {
@@ -25,12 +26,14 @@ export function collectNextVisibleBatchTarget({
   checkboxSelector,
   controlText,
   ignoredKeys = [],
+  skipLeadingCount = 0,
 }: SelectVisibleBatchInput): SelectionTarget | null {
   class VisibleBatchTargetCollector {
     private readonly ignored = new Set(ignoredKeys);
 
     public collect(): SelectionTarget | null {
-      const candidate = this.findCandidates()[0];
+      const candidates = this.findCandidates();
+      const candidate = candidates[Math.min(Math.max(0, skipLeadingCount), candidates.length)];
 
       if (!candidate) {
         return null;

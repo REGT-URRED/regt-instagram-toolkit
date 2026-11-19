@@ -1,6 +1,9 @@
 import type { LogLevel } from './utils/logger.js';
+import type { ProgressPhase } from './utils/progress.js';
 
 export type CleanupMode = 'likes' | 'comments';
+
+export type ProgressHandler = (phase: ProgressPhase, message: string, details?: string) => void;
 
 export type TranslationValue = string | string[];
 
@@ -28,6 +31,7 @@ export interface BlockAccountsOptions {
   dryRun?: boolean;
   ledgerPath?: string;
   failuresPath?: string;
+  onPhase?: ProgressHandler;
 }
 
 export interface BlockAccountsResult {
@@ -90,4 +94,5 @@ export interface CleanupOptions {
   errorDialogTimeoutMs: number;
   limit?: number;
   dryRun: boolean;
+  onPhase?: ProgressHandler;
 }

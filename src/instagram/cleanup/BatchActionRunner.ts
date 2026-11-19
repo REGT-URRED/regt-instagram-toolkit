@@ -1,4 +1,4 @@
-import { waitForDomReady, waitForPageIdle } from '../../browser/waits.js';
+import { waitForPageIdle } from '../../browser/waits.js';
 import { clickByLabels } from '../clickByLabels.js';
 import type { CleanupContext } from './CleanupContext.js';
 import { NetworkVerifier } from './NetworkVerifier.js';
@@ -63,7 +63,7 @@ export class BatchActionRunner {
     ]);
 
     if (actionResult.type === 'error-dialog' && actionResult.found) {
-      await this.recoverFromInstagramErrorDialog();
+      await this.dismissInstagramErrorDialog();
       return { status: 'recovered-error-dialog' };
     }
 
@@ -73,7 +73,7 @@ export class BatchActionRunner {
     } else {
       this.context.warn('No Instagram cleanup toast was detected after confirmation.');
       if (await this.waitForInstagramErrorDialog(this.context.options.errorDialogTimeoutMs)) {
-        await this.recoverFromInstagramErrorDialog();
+        await this.dismissInstagramErrorDialog();
         return { status: 'recovered-error-dialog' };
       }
 
@@ -169,6 +169,12 @@ export class BatchActionRunner {
             );
           };
           const errorTexts = [
+            'se produjo un error',
+            'hubo un problema',
+            'algo salio mal',
+            'algo ha salido mal',
+            'intenta de nuevo',
+            'intentalo de nuevo',
             "une erreur s'est produite",
             'une erreur est survenue',
             'something went wrong',
@@ -192,53 +198,23 @@ export class BatchActionRunner {
       .catch(() => false);
   }
 
-  private async recoverFromInstagramErrorDialog(): Promise<void> {
-    const cooldown = this.context.increaseThrottleCooldown();
-    this.context.warn(
-      `Instagram displayed an error dialog after cleanup confirmation. Dismissing it and waiting ${this.formatDuration(cooldown)} before refreshing because Instagram looks throttled.`,
+  private async dismissInstagramErrorDialog(): Promise<void> {
+    const dismissed = await clickByLabels(
+      this.context.page,
+      ['Aceptar', 'ACEPTAR', 'Entendido', 'OK', 'Ok', "D'accord", 'D’accord'],
+      {
+        timeout: 5_000,
+        exact: true,
+        insideDialog: true,
+        debugName: 'Instagram error dialog dismiss',
+      },
     );
-
-    await clickByLabels(this.context.page, ['OK', 'Ok', "D'accord", 'D’accord'], {
-      timeout: 5_000,
-      exact: true,
-      insideDialog: true,
-      debugName: 'Instagram error dialog OK',
-    });
-
-    await this.delay(this.context.consumeThrottleCooldownWait());
-
-    try {
-      await this.context.page.reload({ waitUntil: 'domcontentloaded', timeout: 90_000 });
-    } catch (error) {
-      this.context.warn(
-        `Page refresh did not settle cleanly: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      await this.context.page.goto(this.context.target.url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 90_000,
-      });
+    if (!dismissed) {
+      this.context.warn('Could not find the Instagram error dialog dismiss button.');
     }
-
-    await waitForDomReady(this.context.page, 90_000);
-    await waitForPageIdle(this.context.page, 30_000, 1_500);
   }
 
-  private formatDuration(durationMs: number): string {
-    const seconds = Math.ceil(durationMs / 1000);
 
-    if (seconds < 60) {
-      return `${seconds}s`;
-    }
-
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (remainingSeconds === 0) {
-      return `${minutes}min`;
-    }
-
-    return `${minutes}min ${remainingSeconds}s`;
-  }
 
   private normalize(value: unknown): string {
     return String(value ?? '')
