@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 48c3133 fix: skip black unavailable tile and stop on instagram throttle
 - [2026-11-19] fix: el salto de elementos rechazados ahora es posicional (ignora el primer tile de la lista) en vez de por firma; el tile negro sin link ni imagen no generaba firma y por eso se marcaba el elemento equivocado y el lote volvía a fallar siempre
 - [2026-11-19] fix: el salto posicional se aplica solo al primer lote tras recargar la página (no en cada scroll), así no se saltean likes válidos
 - [2026-11-19] feat: si Instagram rechaza un lote, la limpieza ahora salta el primer elemento seleccionado (carrusel o publicación no disponible) y continúa desde el siguiente en vez de fallar el lote entero; tras 3 rechazos seguidos se detiene y avisa
