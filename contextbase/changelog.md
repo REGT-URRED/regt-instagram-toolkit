@@ -5,7 +5,8 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
-
+- [2026-11-19] [commit] ffde19b feat: elegir navegador y advertir perfil del sistema en el menú
+- [2026-11-19] [commit] 8c69a85 feat: aplicar mejoras de usabilidad y migrar a puppeteer-core
 - [2026-11-18] feat: list status command and shared account parser
 - [2026-11-18] feat: use the markdown list as the living block memory
 - [2026-11-18] docs: rewrite README for a one-minute start
@@ -21,6 +22,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 - [2026-11-19] feat: migración de dependencia `puppeteer` → `puppeteer-core` (package.json, package-lock sincronizado, `npm install`; 24.43.1 instalado)
 - [2026-11-19] docs: advertencias de `--use-system-profile`/`--no-sandbox` y tabla de qué almacena en README; mención de `--no-store` y `npm run reset`
 - [2026-11-19] docs: revisión read-only confirma comportamiento: sin exfiltración; almacena localmente (`.chrome-profile/`, `.state/*.jsonl`)
+
 
 ---
 

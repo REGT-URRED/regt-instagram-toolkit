@@ -66,10 +66,10 @@ regt-instagram-toolkit/
 - **Versión:** 1.0.0
 - **Ecosistema:** Node.js / JavaScript / TypeScript
 - **Frameworks:** Librerías estándar / Vanilla
-- **Lenguajes dominantes:** TypeScript (53), JSON (7), Markdown (4), JavaScript (1)
+- **Lenguajes dominantes:** TypeScript (148), JSON (29), Markdown (26), JavaScript (5), Python (4)
 - **Dependencias:** puppeteer-core, yargs
 - **Scripts:** build, start, likes, comments, block, clean, reset, lint, lint:fix, format, format:check, menu, list:merge, list:count
-- **Directorios raíz:** contextbase, src, translations
+- **Directorios raíz:** .agents, .kilo, .kilocode, .opencode, antiguos_ya_funcionales, contextbase, src, translations
 <!-- CONTEXTBASE:SYNC:END -->
 
 ---
