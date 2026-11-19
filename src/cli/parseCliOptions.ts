@@ -205,8 +205,8 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     })
     .option('accounts-file', {
       type: 'string',
-      default: './accounts.json',
-      describe: 'Path to the JSON or TXT list of accounts to block.',
+      default: './instagram_consolidado_ampliado.md',
+      describe: 'List of accounts to block (.md, .txt or .json).',
     })
     .option('block-limit', {
       type: 'number',

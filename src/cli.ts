@@ -270,12 +270,40 @@ function delay(durationMs: number): Promise<void> {
 
 function loadBlockAccounts(filePath: string): BlockAccountEntry[] {
   const raw = fs.readFileSync(filePath, 'utf8');
-  if (filePath.toLowerCase().endsWith('.txt')) {
-    return raw
-      .split(/\r?\n/)
-      .map((line) => line.split('#')[0]?.trim() ?? '')
-      .filter(Boolean)
-      .map((username) => ({ username }));
+  const extension = filePath.toLowerCase();
+  if (extension.endsWith('.txt') || extension.endsWith('.md')) {
+    const reserved: Record<string, true> = {
+      p: true,
+      reel: true,
+      reels: true,
+      explore: true,
+      accounts: true,
+      stories: true,
+      tv: true,
+      direct: true,
+      about: true,
+      legal: true,
+      developer: true,
+    };
+    const usernames = new Set<string>();
+
+    for (const line of raw.split(/\r?\n/)) {
+      for (const match of line.matchAll(/instagram\.com\/([A-Za-z0-9_.]+)/g)) {
+        const username = match[1]?.replace(/\.+$/, '');
+        if (username && reserved[username.toLowerCase()] !== true) {
+          usernames.add(username);
+        }
+      }
+      const bare = line.replace(/#.*$/, '').trim();
+      if (/^@?[A-Za-z0-9_.]{2,30}$/.test(bare)) {
+        const username = bare.replace(/^@/, '');
+        if (reserved[username.toLowerCase()] !== true) {
+          usernames.add(username);
+        }
+      }
+    }
+
+    return Array.from(usernames).map((username) => ({ username }));
   }
 
   const parsed: unknown = JSON.parse(raw);

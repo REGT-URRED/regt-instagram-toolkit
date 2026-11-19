@@ -6,7 +6,7 @@ Herramienta local para limpiar tu propia cuenta de Instagram y bloquear cuentas 
 
 - **Limpia tus likes** de todo el historial.
 - **Elimina tus comentarios** de todo el historial.
-- **Bloquea cuentas de anuncios** (lista de 244 perfiles en `accounts.json`, ampliable).
+- **Bloquea cuentas de anuncios** usando una lista viva en `instagram_consolidado_ampliado.md` (244 perfiles, ampliable).
 
 Cada acción verifica el resultado real (red y UI), evita repetir trabajo y se detiene si Instagram empieza a limitar la cuenta.
 
@@ -61,6 +61,16 @@ node ./dist/cli.js --comments --hybrid-passes 0   # drena hasta vaciar
 node ./dist/cli.js --block-accounts --block-limit 50 --block-dry-run  # solo verifica
 node ./dist/cli.js --comments --browser edge      # fuerza navegador
 ```
+
+## Lista viva (memoria)
+
+La lista vive en `instagram_consolidado_ampliado.md`. Para añadir tus bloqueados nuevos o listas que te compartan:
+
+```sh
+npm run list:merge -- mis_bloqueados.html otra_lista.txt
+```
+
+Extrae los usuarios, ignora duplicados y añade solo los nuevos. El bloqueo lee ese `.md` por defecto, salta lo ya procesado (`.state/block-ledger.jsonl`) y reintenta los fallos.
 
 ## Navegador
 
