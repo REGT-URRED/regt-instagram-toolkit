@@ -26,7 +26,8 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [x] QA final: spinner Shruggie animado, scroll virtualizado, mensajes dry-run honestos, build+lint limpios
 - [x] QA del dialogo de error de Instagram (cierre con Aceptar + backoff)
 - [x] Limpieza y organizacion del proyecto (antiguos fuera del repo, runtime reseteado)
-- [ ] Reintentar limpieza de likes despues de esperar el limite temporal de Instagram
+- [x] Fix del diálogo de confirmación de eliminación (botones BUTTON reales, no divs con texto general)
+- [ ] Reintentar limpieza de likes después de esperar el límite temporal de Instagram
 - [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menú
 
 ---

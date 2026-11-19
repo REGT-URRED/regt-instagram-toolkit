@@ -346,10 +346,11 @@ export async function runHybridBatch(
     }
     const dialogOpen = await page.evaluate(() => {
       const text = document.body.innerText;
-      return (
+      const hasConfirmDialog =
         text.includes('¿Eliminar comentarios?') ||
-        document.querySelectorAll('[role="dialog"],[aria-modal="true"]').length > 0
-      );
+        text.includes('¿Eliminar este comentario?') ||
+        document.querySelectorAll('[role="dialog"],[aria-modal="true"]').length > 0;
+      return hasConfirmDialog;
     });
     if (!dialogOpen) {
       await clickActionByDom(page, actionLabels);
@@ -358,6 +359,7 @@ export async function runHybridBatch(
         const text = document.body.innerText;
         return (
           !text.includes('¿Eliminar comentarios?') &&
+          !text.includes('¿Eliminar este comentario?') &&
           document.querySelectorAll('[role="dialog"],[aria-modal="true"]').length === 0
         );
       });
@@ -656,7 +658,7 @@ async function clickWithMouse(page: Page, labels: string[]): Promise<boolean> {
 
 async function clickInDialogWithMouse(page: Page, labels: string[]): Promise<boolean> {
   const words = labels.map((label) => label.trim().toLowerCase()).filter(Boolean);
-  const point = await page.evaluate((normalized: string[]) => {
+  const result = await page.evaluate((normalized: string[]) => {
     const isVisible = (element: Element): boolean => {
       if (element.closest('[aria-hidden="true"]')) {
         return false;
@@ -677,25 +679,49 @@ async function clickInDialogWithMouse(page: Page, labels: string[]): Promise<boo
     if (!dialog) {
       return null;
     }
-    const matches = Array.from(
-      dialog.querySelectorAll('button,[role="button"],div,span'),
+    // Buscar primero botones BUTTON reales (no divs con texto general) que coincidan con las labels
+    const buttonMatches = Array.from(dialog.querySelectorAll('button,[role="button"]')).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const buttonTarget = buttonMatches.at(-1);
+    if (buttonTarget) {
+      const rect = buttonTarget.getBoundingClientRect();
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        tag: buttonTarget.tagName,
+        text: (buttonTarget as HTMLElement).innerText.trim(),
+      };
+    }
+    // Fallback: cualquier elemento visible con texto coincidente
+    const anyMatches = Array.from(
+      dialog.querySelectorAll('div,span'),
     ).filter(
       (element) =>
         isVisible(element) &&
         normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
     );
-    const target = matches.at(-1);
-    if (!target) {
+    const anyTarget = anyMatches.at(-1);
+    if (!anyTarget) {
       return null;
     }
-    const clickable = target.closest('button,[role="button"]') ?? target;
-    const rect = clickable.getBoundingClientRect();
-    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+    const rect = anyTarget.getBoundingClientRect();
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+      tag: anyTarget.tagName,
+      text: (anyTarget as HTMLElement).innerText.trim(),
+    };
   }, words);
-  if (!point) {
+  if (process.env['HYBRID_DEBUG'] === '1') {
+    logger.info(`[hybrid][debug] confirmInDialog result=${JSON.stringify(result)}`);
+  }
+  if (!result) {
     return false;
   }
-  await page.mouse.click(point.x, point.y);
+  await page.mouse.click(result.x, result.y);
   return true;
 }
 
@@ -728,33 +754,69 @@ async function clickActionByDom(page: Page, labels: string[]): Promise<boolean> 
 }
 
 async function clickDialogConfirm(page: Page, labels: string[]): Promise<boolean> {
-  return page.evaluate((confirmLabels: string[]) => {
-    const normalized = confirmLabels.map((label) => label.trim().toLowerCase());
-    const visible = (element: Element): boolean => {
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    };
-    const candidates = Array.from(document.querySelectorAll('button,[role="button"],div,span'))
-      .filter(
-        (element) =>
-          visible(element) &&
-          normalized.includes((element as HTMLElement).innerText.trim().toLowerCase()),
-      )
-      .reverse();
-    const target =
-      candidates.find((element) => {
-        let current: HTMLElement | null = element as HTMLElement;
-        for (let depth = 0; current && depth < 10; depth += 1) {
-          if ((current.innerText || '').includes('?')) {
-            return true;
-          }
-          current = current.parentElement;
-        }
+  const normalized = labels.map((label) => label.trim().toLowerCase());
+  const result = await page.evaluate((normalized: string[]) => {
+    const isVisible = (element: Element): boolean => {
+      if (element.closest('[aria-hidden="true"]')) {
         return false;
-      }) ?? candidates.at(-1);
-    (target as HTMLElement | undefined)?.click();
-    return Boolean(target);
-  }, labels);
+      }
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none'
+      );
+    };
+    const dialogs = Array.from(
+      document.querySelectorAll('[role="dialog"],[aria-modal="true"]'),
+    ).filter((element) => isVisible(element));
+    const dialog = dialogs.at(-1);
+    if (!dialog) {
+      return null;
+    }
+    // Buscar primero botones BUTTON reales con las labels de confirmación
+    const buttonMatches = Array.from(dialog.querySelectorAll('button,[role="button"]')).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const buttonTarget = buttonMatches.at(-1);
+    if (buttonTarget) {
+      const rect = buttonTarget.getBoundingClientRect();
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        tag: buttonTarget.tagName,
+        text: (buttonTarget as HTMLElement).innerText.trim(),
+      };
+    }
+    // Fallback: cualquier elemento visible con texto coincidente
+    const anyMatches = Array.from(
+      dialog.querySelectorAll('div,span'),
+    ).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const anyTarget = anyMatches.at(-1);
+    if (!anyTarget) {
+      return null;
+    }
+    const rect = anyTarget.getBoundingClientRect();
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+      tag: anyTarget.tagName,
+      text: (anyTarget as HTMLElement).innerText.trim(),
+    };
+  }, normalized);
+  if (!result) {
+    return false;
+  }
+  await page.mouse.click(result.x, result.y);
+  return true;
 }
 
 function buildResult(args: {

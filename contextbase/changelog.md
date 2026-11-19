@@ -5,6 +5,9 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: diálogo de confirmación de eliminación (botones BUTTON reales no divs) en botón Eliminar y confirmación; manejo de texto singular/plural del diálogo (¿Eliminar este comentario? / ¿Eliminar comentarios?); verificado en producción con bloques de 60 y 20 comentarios eliminados, 0 ban signals
+- [2026-11-19] feat: progreso Shruggie animado y QA final
+- [2026-11-19] [commit] 8385b83 chore: actualizar changelog con commits recientes
 - [2026-11-19] [commit] 231a7fb chore: sync contextbase tras limpieza del proyecto
 - [2026-11-19] [commit] 0028693 fix: manejar dialogo de error de Instagram y limpiar proyecto
 - [2026-11-19] fix: manejo del dialogo de error de Instagram ("Se produjo un error") en likes/comentarios: cierra con Aceptar, registra ban signal y hace backoff para proteger la cuenta
