@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 8ac1079 chore: sincronizar memoria contextbase
 - [2026-11-19] [commit] c856104 fix: harden terminal menu against invalid and empty input
 - [2026-11-19] fix: el panel de opciones ya no se cierra ni falla con entradas invalidas; repite la pregunta mostrando las opciones validas y, tras 5 intentos, usa el valor por defecto en vez de salir.
 - [2026-11-19] fix: Enter en el selector de navegador ya no se cuelga. En raw mode Enter puede llegar como "\r\n" en un solo chunk y antes no coincidia con "\r" ni con "\n"; ahora se detecta cualquier variante y usa el navegador predeterminado.
