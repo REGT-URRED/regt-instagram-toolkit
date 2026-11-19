@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] c87c457 chore: registrar resultado de meta total en contextbase
 - [2026-11-19] Menu y CLI ahora trabajan por META TOTAL en vez de maximo por lote: nuevo flag --goal. Formula aplicada: tamano de lote = ceil(restantes/4), acotado a 20..95 en likes y 20..60 en comentarios; el ultimo lote se recorta para llegar exacto a la meta. Progreso muestra 'acumulado X/meta' y la corrida termina al alcanzar la meta (antes imprimia 'Limit reached: undefined'). Autotest: meta 1000 -> 23 lotes sumando 1000, meta 100 -> 5, meta 20 -> 1, meta 5 -> 1. Verificado en produccion con meta 3 (3 likes eliminados, toast + HTTP 200 liked_unlike). Commit b122f97.
 - [2026-11-19] [commit] 74d0646 chore: registrar commit en contextbase
 - [2026-11-19] [commit] 80f3186 chore: sincronizar memoria contextbase
