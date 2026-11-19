@@ -10,6 +10,30 @@ import { detectBrowserName } from './browser/launchBrowser.js';
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(rootDirectory, 'dist', 'cli.js');
 
+const browserChoices: Record<string, string> = {
+  a: 'auto',
+  b: 'brave',
+  c: 'chrome',
+  e: 'edge',
+  o: 'opera',
+  v: 'vivaldi',
+};
+
+function askSingleKey(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(prompt);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.once('data', (key: Buffer) => {
+      process.stdin.pause();
+      process.stdin.setRawMode(false);
+      const char = key.toString().toLowerCase().trim();
+      process.stdout.write(char + '\n');
+      resolve(char);
+    });
+  });
+}
+
 async function main(): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const detected = detectBrowserName();
@@ -31,12 +55,18 @@ async function main(): Promise<void> {
     return;
   }
 
-  // --- Selección de navegador y perfil ---
+  // --- Selección de navegador (una sola letra, enter automático) ---
   const selectedBrowserDefault = detected || 'auto';
-  const browserAnswer = (
-    await rl.question(`  Navegador [${selectedBrowserDefault}/brave/chrome/edge/opera/vivaldi] (${selectedBrowserDefault}): `)
-  ).trim();
-  const selectedBrowser = browserAnswer || selectedBrowserDefault;
+  const defaultKey = Object.entries(browserChoices).find(([, v]) => v === selectedBrowserDefault)?.[0] || 'a';
+
+  console.log('');
+  console.log('  Navegador:');
+  console.log(`    a) auto   b) brave   c) chrome   e) edge   o) opera   v) vivaldi`);
+  console.log(`    (predeterminado: ${selectedBrowserDefault} · tecla: ${defaultKey})`);
+  console.log('  Escribe una letra y presiona Enter:');
+
+  const browserKey = (await askSingleKey('  > ')).toLowerCase();
+  const selectedBrowser = browserChoices[browserKey] ?? selectedBrowserDefault;
 
   console.log('');
   console.log('  ⚠ Si eliges tu perfil real del navegador, la herramienta usará la pestaña');

@@ -21,13 +21,17 @@ const phaseFrames: Record<ProgressPhase, string[]> = {
 
 const intervalMs = 140;
 
+// Siempre habilitado para que el usuario vea la animación en cualquier terminal
+const isWindows = process.platform === 'win32';
+const clearLine = isWindows ? '\r' : '\r\x1b[2K';
+
 export class ShruggieProgress {
   private timer: ReturnType<typeof setInterval> | null = null;
   private frameIndex = 0;
   private phase: ProgressPhase = 'prepare';
   private message = '';
   private details = '';
-  private readonly enabled = Boolean(process.stdout.isTTY);
+  private readonly enabled = true;
 
   public start(message: string, details = ''): void {
     this.message = message;
@@ -36,7 +40,7 @@ export class ShruggieProgress {
     this.frameIndex = 0;
     this.render();
 
-    if (!this.enabled || this.timer) {
+    if (this.timer) {
       return;
     }
 
@@ -64,25 +68,17 @@ export class ShruggieProgress {
       this.timer = null;
     }
 
-    if (!this.enabled) {
-      return;
-    }
-
     const frame = phaseFrames[this.phase][0] ?? '';
     const finalMessage = message ?? this.message;
     const finalDetails = details ?? this.details;
     const line = [frame, finalMessage, finalDetails].filter(Boolean).join('  ');
-    process.stdout.write(`\r\x1b[2K${line}\n`);
+    process.stdout.write(`${clearLine}${line}\n`);
   }
 
   private render(): void {
-    if (!this.enabled) {
-      return;
-    }
-
     const frames = phaseFrames[this.phase];
     const frame = frames[this.frameIndex % frames.length] ?? '';
     const line = [frame, this.message, this.details].filter(Boolean).join('  ');
-    process.stdout.write(`\r\x1b[2K${line}`);
+    process.stdout.write(`${clearLine}${line}`);
   }
 }
