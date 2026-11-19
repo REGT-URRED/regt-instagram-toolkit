@@ -10,6 +10,25 @@ const cleanupToastTranslationKeys: Record<CleanupMode, string[]> = {
   comments: ['commentsCleanupToast'],
 };
 
+// Instagram reworded the likes toast: it now says "Indicaste que no te gustan
+// N publicaciones" instead of "Ya no te gusta N publicacion". These variants
+// are always merged in so a translation file never makes the toast invisible.
+const builtinToastTemplates: Record<CleanupMode, string[]> = {
+  likes: [
+    'Indicaste que no te gustan {{count}} publicaciones',
+    'Indicaste que no te gusta {{count}} publicaci\u00f3n',
+    'Has indicado que no te gustan {{count}} publicaciones',
+    'Has indicado que no te gusta {{count}} publicaci\u00f3n',
+    "You indicated you don't like {{count}} posts",
+    "You indicated you don't like {{count}} post",
+    'You no longer like {{count}} posts',
+    'You no longer like {{count}} post',
+    "Vous avez indiqu\u00e9 que vous n'aimez pas {{count}} publications",
+    "Vous avez indiqu\u00e9 que vous n'aimez pas {{count}} publication",
+  ],
+  comments: [],
+};
+
 export class ToastVerifier {
   public constructor(private readonly context: CleanupContext) {}
 
@@ -43,9 +62,12 @@ export class ToastVerifier {
   }
 
   private get toastTemplates(): string[] {
-    return getTranslationValues(
-      this.context.translations,
-      cleanupToastTranslationKeys[this.context.target.mode],
+    const mode = this.context.target.mode;
+    return Array.from(
+      new Set([
+        ...getTranslationValues(this.context.translations, cleanupToastTranslationKeys[mode]),
+        ...builtinToastTemplates[mode],
+      ]),
     );
   }
 }

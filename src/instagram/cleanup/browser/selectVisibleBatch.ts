@@ -52,6 +52,7 @@ export function collectNextVisibleBatchTarget({
 
     private isSelectableCandidate(element: Element): boolean {
       return (
+        !this.hasUnavailableMedia(element) &&
         this.getItemSignature(element) !== null &&
         !this.ignored.has(this.getCandidateKey(element)) &&
         this.isVisible(element) &&
@@ -136,6 +137,40 @@ export function collectNextVisibleBatchTarget({
       }
 
       return shortestSide >= 8 && longestSide / shortestSide <= 3;
+    }
+
+    private hasUnavailableMedia(element: Element): boolean {
+      let current: Element | null = element;
+
+      for (let depth = 0; current && depth < 14; depth += 1) {
+        const images = Array.from(current.querySelectorAll<HTMLImageElement>('img'));
+        let sawUnavailableImage = false;
+
+        for (const image of images) {
+          const source = image.currentSrc || image.src || '';
+          if (!source) {
+            continue;
+          }
+
+          if (/\/null\.(?:jpe?g|png|webp)(?:\?|$)/i.test(source)) {
+            sawUnavailableImage = true;
+            continue;
+          }
+
+          const rect = image.getBoundingClientRect();
+          if (rect.width >= 24 && rect.height >= 24) {
+            return false;
+          }
+        }
+
+        if (sawUnavailableImage) {
+          return true;
+        }
+
+        current = current.parentElement;
+      }
+
+      return false;
     }
 
     private isChecked(element: Element): boolean {
@@ -1013,8 +1048,43 @@ export async function selectBatchInPage({
           !this.isControl(element) &&
           !this.isNavigationCandidate(element) &&
           this.looksLikeCheckbox(element) &&
+          !this.hasUnavailableMedia(element) &&
           !this.isChecked(element),
       );
+    }
+
+    private hasUnavailableMedia(element: Element): boolean {
+      let current: Element | null = element;
+
+      for (let depth = 0; current && depth < 14; depth += 1) {
+        const images = Array.from(current.querySelectorAll<HTMLImageElement>('img'));
+        let sawUnavailableImage = false;
+
+        for (const image of images) {
+          const source = image.currentSrc || image.src || '';
+          if (!source) {
+            continue;
+          }
+
+          if (/\/null\.(?:jpe?g|png|webp)(?:\?|$)/i.test(source)) {
+            sawUnavailableImage = true;
+            continue;
+          }
+
+          const rect = image.getBoundingClientRect();
+          if (rect.width >= 24 && rect.height >= 24) {
+            return false;
+          }
+        }
+
+        if (sawUnavailableImage) {
+          return true;
+        }
+
+        current = current.parentElement;
+      }
+
+      return false;
     }
 
     private looksLikeCheckbox(element: Element): boolean {

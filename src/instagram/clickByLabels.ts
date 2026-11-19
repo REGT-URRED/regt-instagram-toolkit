@@ -14,6 +14,7 @@ export interface ClickByLabelsOptions {
   waitAfterClickTimeout?: number;
   waitAfterClickIdleTime?: number;
   debugName?: string;
+  useMouseClick?: boolean;
 }
 
 export interface ClickPoint {
@@ -36,6 +37,10 @@ class LabelClicker {
         return false;
       }
 
+      if (this.options.useMouseClick && !(await this.clickWithMouse(match))) {
+        return false;
+      }
+
       await this.waitAfterClick();
       return true;
     } catch {
@@ -54,6 +59,27 @@ class LabelClicker {
     return match;
   }
 
+  private async clickWithMouse(point: ClickPoint): Promise<boolean> {
+    const viewport = await this.page.evaluate(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    }));
+    const x = point.x;
+    const y = point.y;
+
+    if (x < 1 || y < 1 || x > viewport.width - 1 || y > viewport.height - 1) {
+      return false;
+    }
+
+    try {
+      await this.page.mouse.move(x, y);
+      await this.page.mouse.click(x, y);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private matchInput(): LabelMatchInput {
     return {
       labelsToFind: this.labels.map(normalizeText).filter(Boolean),
@@ -62,6 +88,7 @@ class LabelClicker {
       shouldIncludeInputs: this.options.includeInputs,
       shouldIncludeTextElements: this.options.includeTextElements,
       shouldMatchInsideDialog: this.options.insideDialog,
+      shouldDispatchClick: !this.options.useMouseClick,
     };
   }
 
@@ -93,6 +120,7 @@ export async function clickByLabels(
     waitAfterClickTimeout: options.waitAfterClickTimeout ?? 2_500,
     waitAfterClickIdleTime: options.waitAfterClickIdleTime ?? 500,
     debugName: options.debugName ?? labels.join(' / '),
+    useMouseClick: options.useMouseClick ?? false,
   };
   const clicker = new LabelClicker(page, labels, resolvedOptions);
 

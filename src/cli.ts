@@ -223,10 +223,13 @@ async function runCleanupLoop(
   translations: TranslationDictionary,
   options: CliOptions,
 ): Promise<boolean> {
+  let consecutiveRecoveries = 0;
+
   while (true) {
     try {
       await waitForInstagramLogin(page, options.loginTimeout);
       const total = await runCleanupJobs(jobs, translations, options);
+      consecutiveRecoveries = 0;
 
       logger.info(`Done. Total selected/processed items: ${total}.`);
       return true;
@@ -239,6 +242,15 @@ async function runCleanupLoop(
 
       if (!options.recoverOnError) {
         logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+        return false;
+      }
+
+      consecutiveRecoveries += 1;
+      if (consecutiveRecoveries >= 3) {
+        logger.error(
+          'Cleanup could not recover the Instagram session after 3 attempts (browser closed, page crashed or Instagram kept rejecting the batches). Stopping.',
+        );
         process.exitCode = 1;
         return false;
       }

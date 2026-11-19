@@ -5,6 +5,15 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: la deteccion de la peticion real de Instagram comparaba el blocklist ("events", "logging", etc.) contra el cuerpo del request, y todo payload de Instagram contiene "events"; eso descartaba TODAS las peticiones validas y el lote se contaba como exitoso sin verificar nada. Ahora el blocklist solo mira la URL y el unlike se detecta por appid liked_unlike/unlike.
+- [2026-11-19] fix: el toast real de likes cambio en Instagram a "Indicaste que no te gustan N publicaciones"; se agregaron variantes es/en/fr al verificador y ya no depende del archivo de traducciones.
+- [2026-11-19] fix: el boton de accion y la confirmacion ahora se pulsan con mouse real (CDP) en vez de element.click(); el centro de actividades ignora el clic sintetico y el lote quedaba sin aplicar.
+- [2026-11-19] fix: la confirmacion es opcional inteligente (se espera 3s el dialogo, si aparece se acepta con mouse y se exige exito; si no aparece se aplica directo), sin falsos positivos.
+- [2026-11-19] feat: contraalgoritmo de manejo de errores "buen camino / mal camino" (RecoveryPolicy): clasifica el fallo (action-button-missing, confirmation-missing, instagram-error-dialog, unacknowledged-batch, items-still-visible, navigation-lost), aplica recarga+reintento acotado o aborta con mensaje claro; nunca reintenta infinito.
+- [2026-11-19] fix: un lote sin toast y sin respuesta de red ya no se cuenta como exitoso: se verifica contra la lista de actividad y, si los elementos siguen visibles, se trata como fallo con recarga.
+- [2026-11-19] fix: el tile negro no disponible se excluye por imagen (null.jpg sin miniatura real) y no solo por posicion; el salto posicional queda como respaldo.
+- [2026-11-19] qa: verificado en produccion con Brave del sistema: 2 lotes de 20 likes eliminados (40 reales), confirmados por toast y HTTP 200 liked_unlike, 0 errores; build+lint limpios.
+- [2026-11-19] [commit] 023f895 fix: never select the unavailable first likes tile
 - [2026-11-19] fix: el primer ítem de la grilla de likes (tile negro no disponible) ya no se selecciona nunca, desde el primer lote y en todos los siguientes, porque Instagram rechaza el lote entero
 - [2026-11-19] fix: la selección descarta candidatos sin firma (sin link, imagen ni texto), que son los tiles rotos que hacen fallar la eliminación
 - [2026-11-19] fix: tras un lote exitoso el salto vuelve a 1 (solo el tile negro), para no saltear likes válidos de más

@@ -27,8 +27,10 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [x] QA del dialogo de error de Instagram (cierre con Aceptar + backoff)
 - [x] Limpieza y organizacion del proyecto (antiguos fuera del repo, runtime reseteado)
 - [x] Fix del diálogo de confirmación de eliminación (botones BUTTON reales, no divs con texto general)
-- [ ] Reintentar limpieza de likes después de esperar el límite temporal de Instagram
-- [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menú
+- [x] Reintentar limpieza de likes despues del limite temporal de Instagram (verificado: 40 likes eliminados en produccion)
+- [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menu
+- [x] Implementar contraalgoritmo buen camino / mal camino (RecoveryPolicy) con limites por tipo de fallo
+- [x] Corregir deteccion de red y toast de likes (40 likes eliminados y verificados)
 
 ---
 *Regla: Marcar con `[x]` las tareas completadas y agregar con `[ ]` cualquier nuevo requerimiento técnico.*

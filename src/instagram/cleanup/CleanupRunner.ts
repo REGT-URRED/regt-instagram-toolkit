@@ -1,11 +1,13 @@
 import { waitForDomReady, waitForPageIdle } from '../../browser/waits.js';
 import type { CleanupContext } from './CleanupContext.js';
-import { BatchActionRunner } from './BatchActionRunner.js';
+import { BatchActionRunner, type BatchActionResult } from './BatchActionRunner.js';
 import { InstagramThrottledError } from '../errors.js';
 import { PostVisibilityVerifier } from './PostVisibilityVerifier.js';
 import { ScrollManager } from './ScrollManager.js';
 import { SelectionManager } from './SelectionManager.js';
+import { RecoveryPolicy } from './RecoveryPolicy.js';
 import { SelectModeController } from './SelectModeController.js';
+import type { SelectionResult } from './types.js';
 
 const selectedItemsDisappearTimeoutMs = 60_000;
 const maxConsecutiveThrottleSignals = 3;
@@ -17,6 +19,7 @@ export class CleanupRunner {
   private readonly scrollManager: ScrollManager;
   private readonly selectionManager: SelectionManager;
   private readonly selectModeController: SelectModeController;
+  private readonly recoveryPolicy = new RecoveryPolicy();
 
   public constructor(private readonly context: CleanupContext) {
     this.actionRunner = new BatchActionRunner(context);
@@ -36,9 +39,10 @@ export class CleanupRunner {
       await this.waitBeforeNextBatchIfThrottled();
 
       this.context.notifyPhase('select', 'buscando el botón Seleccionar');
-      await this.selectModeController.ensure();
-      this.context.notifyPhase('select', 'seleccionando elementos');
-      const selection = await this.selectionManager.selectBatch(this.context.pickBatchSize());
+      const selection = await this.selectBatchWithRecovery();
+      if (selection === null) {
+        continue;
+      }
 
       if (selection.count === 0) {
         this.context.markEmptyPass();
@@ -74,7 +78,11 @@ export class CleanupRunner {
         break;
       }
 
-      const actionResult = await this.actionRunner.run();
+      const actionResult = await this.runBatchAction();
+      if (actionResult === null) {
+        continue;
+      }
+
       if (actionResult.status === 'recovered-error-dialog') {
         const leadingSkipCount = this.context.increaseLeadingSkip();
 
@@ -106,15 +114,33 @@ export class CleanupRunner {
           await this.postVisibilityVerifier.refreshAndCollectRemainingSelectedItems();
 
         if (remainingAfterRefresh.length > 0) {
+          const decision = this.recoveryPolicy.registerFailure('items-still-visible');
           this.handlePossibleThrottle(remainingAfterRefresh);
-          this.abortIfInstagramIsThrottling();
+          this.context.warn(decision.message);
+          this.context.notifyPhase('error', `recuperando lote · acumulado ${this.context.totalProcessed}`);
+
+          if (decision.step === 'abort') {
+            this.abortIfInstagramIsThrottling();
+            throw new InstagramThrottledError(decision.message, true);
+          }
+
           this.context.armLeadingSkip();
+          await this.reloadActivityPage();
           continue;
         }
       }
 
-      const processed = actionResult.count ?? selection.count;
+      if (actionResult.status === 'unverified') {
+        this.context.debug(
+          'Instagram did not acknowledge this batch, but the selected items are gone from the activity list; counting it as processed.',
+        );
+      }
+
+      const processed = actionResult.status === 'confirmed' && actionResult.count !== null
+        ? actionResult.count
+        : selection.count;
       this.context.addProcessed(processed);
+      this.recoveryPolicy.resetAll();
       this.context.resetSkippedKeyCounter();
       this.context.resetThrottleSignals();
       this.context.notifyPhase('done', `lote completado: ${processed}`);
@@ -127,6 +153,57 @@ export class CleanupRunner {
     }
 
     return this.context.totalProcessed;
+  }
+
+  private async selectBatchWithRecovery(): Promise<SelectionResult | null> {
+    try {
+      await this.selectModeController.ensure();
+      this.context.notifyPhase('select', 'seleccionando elementos');
+      return await this.selectionManager.selectBatch(this.context.pickBatchSize());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const decision = this.recoveryPolicy.registerFailure('navigation-lost');
+
+      this.context.warn(`${decision.message} Reason: ${message}`);
+      this.context.notifyPhase('error', `recuperando selección · acumulado ${this.context.totalProcessed}`);
+
+      if (decision.step === 'abort') {
+        throw new InstagramThrottledError(decision.message, true);
+      }
+
+      this.context.armLeadingSkip();
+      await this.delay(decision.delayMs);
+      await this.reloadActivityPage();
+      return null;
+    }
+  }
+
+  /**
+   * Good path: one batch walks select -> action -> confirm -> verify and comes
+   * back with a confirmed or unverified result.
+   * Bad path: the batch throws, the failure is classified, and the policy
+   * decides between one bounded reload-and-retry or a clean abort.
+   */
+  private async runBatchAction(): Promise<BatchActionResult | null> {
+    try {
+      return await this.actionRunner.run();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const kind = RecoveryPolicy.classifyActionFailure(message);
+      const decision = this.recoveryPolicy.registerFailure(kind);
+
+      this.context.warn(`${decision.message} Reason: ${message}`);
+      this.context.notifyPhase('error', `recuperando: ${decision.kind}`);
+
+      if (decision.step === 'abort') {
+        throw new InstagramThrottledError(decision.message, true);
+      }
+
+      this.context.armLeadingSkip();
+      await this.delay(decision.delayMs);
+      await this.reloadActivityPage();
+      return null;
+    }
   }
 
   private async waitBetweenBatches(): Promise<void> {

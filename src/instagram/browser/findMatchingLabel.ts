@@ -7,6 +7,7 @@ export interface LabelMatchInput {
   shouldIncludeInputs: boolean;
   shouldIncludeTextElements: boolean;
   shouldMatchInsideDialog: boolean;
+  shouldDispatchClick: boolean;
 }
 
 export function findMatchingLabel({
@@ -16,6 +17,7 @@ export function findMatchingLabel({
   shouldIncludeInputs,
   shouldIncludeTextElements,
   shouldMatchInsideDialog,
+  shouldDispatchClick,
 }: LabelMatchInput): ClickPoint | null {
   class LabelMatcher {
     public find(): ClickPoint | null {
@@ -27,7 +29,9 @@ export function findMatchingLabel({
         return null;
       }
 
-      this.clickElement(chosen.element);
+      if (shouldDispatchClick) {
+        this.clickElement(chosen.element);
+      }
 
       const rect = chosen.element.getBoundingClientRect();
       return {

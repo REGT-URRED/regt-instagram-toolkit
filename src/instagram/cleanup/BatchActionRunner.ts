@@ -11,6 +11,7 @@ const errorDialogRecoveryTimeoutMs = 120_000;
 
 export type BatchActionResult =
   | { status: 'confirmed'; count: number | null }
+  | { status: 'unverified' }
   | { status: 'recovered-error-dialog' };
 
 export class BatchActionRunner {
@@ -27,9 +28,12 @@ export class BatchActionRunner {
     const mutationRequest = this.networkVerifier.waitForMutation();
     const toastRequest = this.toastVerifier.waitForNewToast(previousToasts, this.getToastTimeout());
 
+    // Instagram's activity center ignores synthetic element.click() calls for
+    // the bulk action bar, so the click is dispatched as a real mouse event.
     const actionClicked = await clickByLabels(this.context.page, this.context.target.actionLabels, {
-      timeout: 6000,
+      timeout: 8000,
       preferLast: true,
+      useMouseClick: true,
       debugName: this.context.target.actionLabels.join(' / '),
     });
 
@@ -39,20 +43,9 @@ export class BatchActionRunner {
 
     await this.delay(this.randomConfirmDelay());
 
-    const confirmed = await clickByLabels(this.context.page, this.context.target.confirmLabels, {
-      timeout: 8000,
-      preferLast: true,
-      insideDialog: true,
-      debugName: `Confirmation ${this.context.target.confirmLabels.join(' / ')}`,
-    });
-
-    if (!confirmed) {
-      throw new Error(
-        'The cleanup confirmation button was not found. No manual fallback was attempted.',
-      );
-    }
-
-    await this.waitForConfirmationDialogToClose();
+    // Bulk actions may open a confirmation sheet, while a single item is
+    // applied directly. The dialog is only required when it actually appears.
+    const hadConfirmationDialog = await this.confirmIfDialogAppeared();
 
     const actionResult = await Promise.race([
       toastRequest.then((toastResult) => ({ type: 'toast' as const, toastResult })),
@@ -77,11 +70,92 @@ export class BatchActionRunner {
         return { status: 'recovered-error-dialog' };
       }
 
-      this.networkVerifier.ensureMutationSucceeded(await mutationRequest);
+      const mutation = await mutationRequest;
+      this.networkVerifier.ensureMutationSucceeded(mutation);
+      if (!mutation) {
+        this.context.warn(
+          'Instagram did not confirm the cleanup through a toast or a network response. The batch will be verified against the activity list instead of being counted as done.',
+        );
+        await waitForPageIdle(this.context.page, 8_000, 750);
+        return { status: 'unverified' };
+      }
+    }
+
+    if (hadConfirmationDialog) {
+      this.context.debug('Instagram cleanup confirmation dialog was accepted.');
     }
 
     await waitForPageIdle(this.context.page, 8_000, 750);
     return { status: 'confirmed', count: toastResult?.count ?? null };
+  }
+
+  private async confirmIfDialogAppeared(): Promise<boolean> {
+    const labels = this.context.target.confirmLabels.map((label) => this.normalize(label));
+    const appeared = await this.context.page
+      .waitForFunction(
+        (confirmationLabels: string[]) => {
+          const normalize = (value: unknown): string =>
+            String(value ?? '')
+              .normalize('NFKD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/[\u2019\u2018\u0060]/g, "'")
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
+          const isVisible = (element: Element): boolean => {
+            if (element.closest('[aria-hidden="true"]')) {
+              return false;
+            }
+
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.visibility !== 'hidden' &&
+              style.display !== 'none'
+            );
+          };
+
+          return Array.from(document.querySelectorAll('[role="dialog"], [aria-modal="true"]'))
+            .filter((element) => isVisible(element))
+            .some((dialog) => {
+              const text = normalize(dialog.textContent ?? '');
+              return confirmationLabels.some((label) => label && text.includes(label));
+            });
+        },
+        { timeout: 3_000, polling: 150 },
+        labels,
+      )
+      .then(async (handle) => {
+        await handle.dispose();
+        return true;
+      })
+      .catch(() => false);
+
+    if (!appeared) {
+      this.context.debug(
+        'No confirmation dialog appeared; Instagram applied the action directly.',
+      );
+      return false;
+    }
+
+    const confirmed = await clickByLabels(this.context.page, this.context.target.confirmLabels, {
+      timeout: 8_000,
+      preferLast: true,
+      insideDialog: true,
+      useMouseClick: true,
+      debugName: `Confirmation ${this.context.target.confirmLabels.join(' / ')}`,
+    });
+
+    if (!confirmed) {
+      throw new Error(
+        'Instagram asked to confirm the cleanup but the confirmation button could not be clicked.',
+      );
+    }
+
+    await this.waitForConfirmationDialogToClose();
+    return true;
   }
 
   private randomConfirmDelay(): number {
@@ -199,6 +273,19 @@ export class BatchActionRunner {
   }
 
   private async dismissInstagramErrorDialog(): Promise<void> {
+    const dialogText = await this.context.page
+      .evaluate(() =>
+        Array.from(document.querySelectorAll('[role="dialog"],[aria-modal="true"]'))
+          .map((dialog) => (dialog as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
+          .filter(Boolean)
+          .join(' | ')
+          .slice(0, 400),
+      )
+      .catch(() => '');
+    if (dialogText) {
+      this.context.warn(`Instagram error dialog text: ${dialogText}`);
+    }
+
     const dismissed = await clickByLabels(
       this.context.page,
       ['Aceptar', 'ACEPTAR', 'Entendido', 'OK', 'Ok', "D'accord", 'D’accord'],
