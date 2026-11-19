@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] 44918fc chore: registrar commit en contextbase
 - [2026-11-19] [commit] 3239e9c chore: registrar resultado del menu robusto en contextbase
 - [2026-11-19] Panel de menu endurecido contra errores humanos. Bug raiz del Enter: en raw mode Windows puede entregar '\r\n' en un solo chunk y readKey solo comparaba con '\r' o '\n', por lo que se quedaba esperando para siempre. Ahora cualquier variante de Enter resuelve y usa el navegador predeterminado. Ademas: opcion de menu invalida repite la pregunta con las opciones validas (antes salia del programa), tras 5 intentos usa el valor por defecto; la meta acepta 100/1.000/1,000/1k/2.5k; el perfil acepta S/Si/Si con acento/Yes/N/No; se descartan secuencias ANSI (flechas, focus) y se maneja EOF sin colgarse; si el proceso hijo no inicia o falla, mensaje claro. Probado con entrada piped: opcion 9 -> repite y luego 4 sale; meta abc -> 1k da 1000; perfil quizas -> s da true; tecla x -> b da brave; Enter en todo usa defaults. Commit c856104.
 - [2026-11-19] [commit] 8b3e2d7 chore: registrar commit en contextbase
