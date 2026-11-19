@@ -16,6 +16,7 @@ Seguimiento del estado de tareas con alto contraste visual.
 ---
 
 ## Tareas Pendientes / En Progreso
+- [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menu con el nuevo RecoveryPolicy
 
 - [ ] Validar cobertura de pruebas funcionales y unitarias
 - [ ] Revisar optimizaciones de rendimiento y seguridad

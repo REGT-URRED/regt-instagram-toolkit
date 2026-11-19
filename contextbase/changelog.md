@@ -5,6 +5,8 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] Limpieza de likes reparada y verificada en produccion. Causas raiz: (1) NetworkVerifier aplicaba el blocklist ('events', 'logging', etc.) sobre el cuerpo del request y todo payload de Instagram contiene 'events', por lo que descartaba TODAS las peticiones validas; ahora solo mira la URL y detecta appid liked_unlike/unlike. (2) Instagram cambio el toast a 'Indicaste que no te gustan N publicaciones'; se agregaron variantes es/en/fr. (3) El boton de accion y la confirmacion ahora usan mouse real (CDP) porque el activity center ignora element.click(); la confirmacion es opcional pero obligatoria si el dialogo aparece. (4) Un lote sin toast ni respuesta de red ya no se cuenta como exitoso. Se agrego RecoveryPolicy (buen camino / mal camino) con clasificacion y limites por tipo de fallo: action-button-missing, confirmation-missing, instagram-error-dialog, unacknowledged-batch, items-still-visible, navigation-lost. Verificado con Brave del sistema: 40 likes eliminados en dos lotes de 20 y 5 mas en corrida final, todos confirmados por toast y HTTP 200 liked_unlike. Commit 8b07e1b.
+- [2026-11-19] [commit] 2626fde chore: registrar commit en contextbase
 - [2026-11-19] [commit] 14d7cef chore: sincronizar memoria contextbase
 - [2026-11-19] [commit] 63a4a6d chore: registrar commit en contextbase
 - [2026-11-19] [commit] 8b07e1b fix: detect real instagram likes mutations and add bounded error recovery
