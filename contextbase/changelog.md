@@ -5,6 +5,8 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: limpieza de comentarios en español — traducciones bilingües por defecto, merge de diccionarios (en.json ya no pisa es), clic real de mouse (CDP) en botón Eliminar y confirmación; verificado en producción con Brave del sistema (5 comentarios eliminados sin ban signals)
+- [2026-11-19] [commit] dc59df8 chore: registrar commits finales en contextbase
 - [2026-11-19] [commit] ffde19b feat: elegir navegador y advertir perfil del sistema en el menú
 - [2026-11-19] [commit] 8c69a85 feat: aplicar mejoras de usabilidad y migrar a puppeteer-core
 - [2026-11-18] feat: list status command and shared account parser

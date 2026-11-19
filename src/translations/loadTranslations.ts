@@ -42,8 +42,14 @@ export function loadTranslations(filePath?: string): TranslationDictionary {
     return { ...defaultTranslations };
   }
 
-  return {
-    ...defaultTranslations,
-    ...readTranslationFile(filePath),
-  };
+  const overrides = readTranslationFile(filePath);
+  const merged: TranslationDictionary = { ...defaultTranslations };
+
+  for (const [key, value] of Object.entries(overrides)) {
+    const baseValues = asStringArray(merged[key], key);
+    const overrideValues = asStringArray(value, key);
+    merged[key] = Array.from(new Set([...baseValues, ...overrideValues]));
+  }
+
+  return merged;
 }

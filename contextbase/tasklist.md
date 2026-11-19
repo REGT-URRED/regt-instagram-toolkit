@@ -20,7 +20,9 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [ ] Validar cobertura de pruebas funcionales y unitarias
 - [ ] Revisar optimizaciones de rendimiento y seguridad
 - [ ] Preparar empaquetado o despliegue a producción
-- [ ] Verificar funcionalidad del toolkit manualmente: `npm run menu`, `npm run reset` (ejecutar con el navegador)
+- [x] Verificar funcionalidad del toolkit manualmente: `npm run menu`, `npm run reset` (ejecutar con el navegador)
+- [x] Verificar limpieza de comentarios en producción con Brave del sistema (5 comentarios, sin ban signals)
+- [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menú
 
 ---
 *Regla: Marcar con `[x]` las tareas completadas y agregar con `[ ]` cualquier nuevo requerimiento técnico.*

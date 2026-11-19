@@ -2,7 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { Page } from 'puppeteer-core';
 import { waitForDomReady, waitForPageIdle } from '../browser/waits.js';
 import { BanGuard } from '../core/banGuard.js';
-import { invokeCapability, type CapabilitySet } from '../core/capabilities.js';
+import { invokeCapability, type CapabilityRule, type CapabilitySet } from '../core/capabilities.js';
 import { Ledger } from '../core/ledger.js';
 import { MutationRecorder } from '../core/mutationRecorder.js';
 import { RateGovernor, type RateGovernorSnapshot } from '../core/rateGovernor.js';
@@ -199,7 +199,7 @@ export async function runHybridBatch(
     : { role: 'button', names: confirmLabels, scope: 'dialog' as const, preferLast: true };
 
   const selectStartedAt = Date.now();
-  const selected = await activateSelectMode(page, selectLabels);
+  const selected = await activateSelectMode(page, selectLabels, capabilities.select);
   timings.selectModeMs = Date.now() - selectStartedAt;
   if (!selected) {
     throw new Error('The Select control did not enter selection mode.');
@@ -284,8 +284,10 @@ export async function runHybridBatch(
   await respectBanGuard();
 
   await governor.wait();
+  await debugState('before-action');
   const actionStartedAt = Date.now();
-  const actedByDom = await clickActionByDom(page, actionLabels);
+  const actedByMouse = await clickWithMouse(page, actionLabels);
+  const actedByDom = actedByMouse ? false : await clickActionByDom(page, actionLabels);
   const actedByLabel = actedByDom
     ? false
     : await clickByLabels(page, actionLabels, {
@@ -293,10 +295,16 @@ export async function runHybridBatch(
         preferLast: true,
         debugName: 'Cleanup action',
       });
-  const acted = actedByDom || actedByLabel || (await invokeCapability(page, actionRule, 6_000));
+  const acted =
+    actedByMouse ||
+    actedByDom ||
+    actedByLabel ||
+    (await invokeCapability(page, actionRule, 6_000));
   timings.actionMs = Date.now() - actionStartedAt;
   if (debugEnabled) {
-    logger.info(`[hybrid][debug] action label=${actedByLabel} capability=${!actedByLabel}`);
+    logger.info(
+      `[hybrid][debug] action mouse=${actedByMouse} dom=${actedByDom} label=${actedByLabel} capability=${!actedByLabel}`,
+    );
   }
   if (!acted) {
     throw new Error('The cleanup action control was not found.');
@@ -347,19 +355,23 @@ export async function runHybridBatch(
     await sleep(600);
     await governor.wait();
     const confirmStartedAt = Date.now();
-    const confirmedByLabel = await clickByLabels(page, confirmLabels, {
-      timeout: 3_000,
-      preferLast: true,
-      insideDialog: true,
-      debugName: 'Cleanup confirmation',
-    });
+    const confirmedByMouse = await clickInDialogWithMouse(page, confirmLabels);
+    const confirmedByLabel = confirmedByMouse
+      ? false
+      : await clickByLabels(page, confirmLabels, {
+          timeout: 3_000,
+          preferLast: true,
+          insideDialog: true,
+          debugName: 'Cleanup confirmation',
+        });
     const confirmed =
+      confirmedByMouse ||
       confirmedByLabel ||
       (await invokeCapability(page, confirmRule, 3_000)) ||
       (await clickDialogConfirm(page, confirmLabels));
     timings.confirmMs = Date.now() - confirmStartedAt;
     if (debugEnabled) {
-      logger.info(`[hybrid][debug] confirm label=${confirmedByLabel} any=${confirmed}`);
+      logger.info(`[hybrid][debug] confirm mouse=${confirmedByMouse} label=${confirmedByLabel} any=${confirmed}`);
     }
     await debugState('after-confirm');
     if (!confirmed) {
@@ -460,7 +472,11 @@ async function waitForActivityList(
   }
 }
 
-async function activateSelectMode(page: Page, labels: string[]): Promise<boolean> {
+async function activateSelectMode(
+  page: Page,
+  labels: string[],
+  capability?: CapabilityRule,
+): Promise<boolean> {
   const words = labels.map((label) => label.trim().toLowerCase()).filter(Boolean);
   const clicked = await page.evaluate((normalized: string[]) => {
     const isVisible = (element: Element): boolean => {
@@ -479,7 +495,9 @@ async function activateSelectMode(page: Page, labels: string[]): Promise<boolean
   }, words);
 
   if (!clicked) {
-    return false;
+    if (!capability || !(await invokeCapability(page, capability, 6_000))) {
+      return false;
+    }
   }
 
   try {
@@ -491,6 +509,108 @@ async function activateSelectMode(page: Page, labels: string[]): Promise<boolean
   } catch {
     return false;
   }
+}
+
+async function clickWithMouse(page: Page, labels: string[]): Promise<boolean> {
+  const words = labels.map((label) => label.trim().toLowerCase()).filter(Boolean);
+  const result = await page.evaluate((normalized: string[]) => {
+    const isVisible = (element: Element): boolean => {
+      if (element.closest('[aria-hidden="true"]')) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none'
+      );
+    };
+    const matchesByLabel = Array.from(document.querySelectorAll('[aria-label]')).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.some(
+          (word) => (element.getAttribute('aria-label') || '').trim().toLowerCase() === word,
+        ),
+    );
+    const matchesByText = Array.from(
+      document.querySelectorAll('div,span,button,[role="button"]'),
+    ).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const pool = matchesByLabel.length > 0 ? matchesByLabel : matchesByText;
+    const target = pool.at(-1);
+    if (!target) {
+      return { point: null as { x: number; y: number } | null, count: 0, pointerEvents: '' };
+    }
+    const clickable = target.closest('button,[role="button"]') ?? target;
+    const rect = clickable.getBoundingClientRect();
+    const style = window.getComputedStyle(clickable);
+    return {
+      point: {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+      },
+      count: pool.length,
+      pointerEvents: style.pointerEvents,
+    };
+  }, words);
+  if (process.env['HYBRID_DEBUG'] === '1') {
+    logger.info(`[hybrid][debug] clickWithMouse labels=${words.join(',')} result=${JSON.stringify(result)}`);
+  }
+  if (!result.point) {
+    return false;
+  }
+  await page.mouse.click(result.point.x, result.point.y);
+  return true;
+}
+
+async function clickInDialogWithMouse(page: Page, labels: string[]): Promise<boolean> {
+  const words = labels.map((label) => label.trim().toLowerCase()).filter(Boolean);
+  const point = await page.evaluate((normalized: string[]) => {
+    const isVisible = (element: Element): boolean => {
+      if (element.closest('[aria-hidden="true"]')) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none'
+      );
+    };
+    const dialogs = Array.from(
+      document.querySelectorAll('[role="dialog"],[aria-modal="true"]'),
+    ).filter((element) => isVisible(element));
+    const dialog = dialogs.at(-1);
+    if (!dialog) {
+      return null;
+    }
+    const matches = Array.from(
+      dialog.querySelectorAll('button,[role="button"],div,span'),
+    ).filter(
+      (element) =>
+        isVisible(element) &&
+        normalized.includes(((element as HTMLElement).innerText || '').trim().toLowerCase()),
+    );
+    const target = matches.at(-1);
+    if (!target) {
+      return null;
+    }
+    const clickable = target.closest('button,[role="button"]') ?? target;
+    const rect = clickable.getBoundingClientRect();
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+  }, words);
+  if (!point) {
+    return false;
+  }
+  await page.mouse.click(point.x, point.y);
+  return true;
 }
 
 async function clickActionByDom(page: Page, labels: string[]): Promise<boolean> {
