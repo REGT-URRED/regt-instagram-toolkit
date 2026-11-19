@@ -23,6 +23,7 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [x] Verificar funcionalidad del toolkit manualmente: `npm run menu`, `npm run reset` (ejecutar con el navegador)
 - [x] Verificar limpieza de comentarios en producción con Brave del sistema (5 comentarios, sin ban signals)
 - [x] Implementar lotes aleatorios y micro-clics variables (likes 20-95, comentarios 20-60, delay 8-45 ms)
+- [x] QA final: spinner Shruggie animado, scroll virtualizado, mensajes dry-run honestos, build+lint limpios
 - [ ] Ejecutar limpieza completa real (likes/comentarios/bloqueo) desde el menú
 
 ---

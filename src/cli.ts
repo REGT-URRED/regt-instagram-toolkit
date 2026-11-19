@@ -25,6 +25,7 @@ import type {
 } from './types.js';
 import { configureDesktopNotifications, notifyCleanupDone } from './utils/desktopNotification.js';
 import { logger, setLogLevel } from './utils/logger.js';
+import { ShruggieProgress } from './utils/progress.js';
 import { formatRange } from './utils/time.js';
 
 const currentFile = fileURLToPath(import.meta.url);
@@ -310,11 +311,14 @@ async function main(): Promise<void> {
         pass += 1;
         const batchSize =
           minBatch + Math.floor(Math.random() * Math.max(1, batchCeiling - minBatch + 1));
+        const progress = new ShruggieProgress();
+        progress.start('iniciando lote', `lote ${batchSize} · acumulado ${processed}`);
         try {
           const result = await runHybridBatch(page, translations, capabilities, {
             mode: hybridMode,
             limit: batchSize,
             dryRun: options.dryRun,
+            onPhase: (phase, message, details) => progress.setPhase(phase, message, details),
             ...(options.noStore
               ? {}
               : {
@@ -322,12 +326,20 @@ async function main(): Promise<void> {
                   mutationsPath: path.join(rootDirectory, '.state/mutations.jsonl'),
                 }),
           });
+          progress.stop(
+            options.dryRun ? `OK dry-run lote ${pass}` : `OK lote ${pass}: ${result.processed}`,
+            `acumulado ${processed + result.processed}`,
+          );
           processed += result.processed;
           lastResult = result;
           logger.info(
-            `Lote ${pass}: ${result.processed} borrados · ${Math.round(
-              result.elapsedMs / 1000,
-            )} s · lote ${batchSize} · total ${processed}`,
+            options.dryRun
+              ? `Lote ${pass}: ${result.processed} seleccionados (dry-run) · ${Math.round(
+                  result.elapsedMs / 1000,
+                )} s · lote ${batchSize} · total ${processed}`
+              : `Lote ${pass}: ${result.processed} borrados · ${Math.round(
+                  result.elapsedMs / 1000,
+                )} s · lote ${batchSize} · total ${processed}`,
           );
           logger.debug(`Hybrid pass raw ${JSON.stringify(result)}`);
           failures = 0;
@@ -335,6 +347,7 @@ async function main(): Promise<void> {
             break;
           }
         } catch (error) {
+          progress.stop('ERROR en el lote', `lote ${batchSize}`);
           failures += 1;
           if (failures >= 3) {
             throw error;

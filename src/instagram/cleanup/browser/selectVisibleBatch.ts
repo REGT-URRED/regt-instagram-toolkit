@@ -1100,9 +1100,28 @@ export async function selectBatchInPage({
         return false;
       }
       const beforeTop = last.getBoundingClientRect().top;
+      const beforeCount = boxes.length;
       last.scrollIntoView({ block: 'center' });
-      window.scrollBy(0, Math.round(window.innerHeight * 0.5));
-      await this.delay(600);
+
+      let scroller: Element | null = last.parentElement;
+      while (scroller && scroller !== document.body) {
+        const style = window.getComputedStyle(scroller);
+        const scrollable =
+          (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+          scroller.scrollHeight > scroller.clientHeight + 10;
+        if (scrollable) {
+          scroller.scrollTop = Math.min(
+            scroller.scrollHeight,
+            scroller.scrollTop + Math.round(scroller.clientHeight * 0.8),
+          );
+          break;
+        }
+        scroller = scroller.parentElement;
+      }
+      if (!scroller || scroller === document.body) {
+        window.scrollBy(0, Math.round(window.innerHeight * 0.6));
+      }
+      await this.delay(900);
 
       const afterBoxes = Array.from(document.querySelectorAll(checkboxSelector));
       const newLast = afterBoxes.at(-1);
@@ -1113,7 +1132,7 @@ export async function selectBatchInPage({
       return (
         newLast !== last ||
         Math.abs(afterTop - beforeTop) > 4 ||
-        afterBoxes.length !== boxes.length
+        afterBoxes.length !== beforeCount
       );
     }
 

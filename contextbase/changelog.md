@@ -5,6 +5,8 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] qa: animación Shruggie con progreso acumulado por fase, scroll virtualizado mejorado (31/40 seleccionados en dry-run), mensajes dry-run honestos, timeout de lista 30s, retry de acción; build+lint limpios
+- [2026-11-19] [commit] 0851e83 feat: lotes aleatorios por pasada y micro-clics variables
 - [2026-11-19] feat: lotes aleatorios por pasada (likes 20-95, comentarios 20-60) y micro-clics con delay aleatorio 8-45 ms; dry-run verificado (lote 29 elegido de 20-40)
 - [2026-11-19] [commit] 82d45cf fix: limpieza de comentarios en espanol con clic real de mouse
 - [2026-11-19] fix: limpieza de comentarios en español — traducciones bilingües por defecto, merge de diccionarios (en.json ya no pisa es), clic real de mouse (CDP) en botón Eliminar y confirmación; verificado en producción con Brave del sistema (5 comentarios eliminados sin ban signals)

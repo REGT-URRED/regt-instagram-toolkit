@@ -12,6 +12,7 @@ import { getCheckboxCandidateSelector } from '../instagram/cleanup/selectors.js'
 import { getTranslationValues } from '../translations/loadTranslations.js';
 import type { TranslationDictionary } from '../types.js';
 import { logger } from '../utils/logger.js';
+import type { ProgressPhase } from '../utils/progress.js';
 
 const activityUrls = {
   likes: 'https://www.instagram.com/your_activity/interactions/likes/',
@@ -24,6 +25,7 @@ export interface HybridBatchOptions {
   dryRun: boolean;
   ledgerPath?: string;
   mutationsPath?: string;
+  onPhase?: (phase: ProgressPhase, message?: string, details?: string) => void;
 }
 
 export interface HybridBatchResult {
@@ -138,7 +140,8 @@ export async function runHybridBatch(
   await waitForPageIdle(page, 3_000, 500);
   timings.gotoMs = Date.now() - gotoStartedAt;
 
-  const listState = await waitForActivityList(page, 15_000);
+  options.onPhase?.('wait', 'esperando la lista de actividad');
+  const listState = await waitForActivityList(page, 30_000);
   timings.listWaitMs = listState.waitedMs;
   if (listState.state === 'empty') {
     logger.info('[hybrid] The activity list is empty; nothing left to do.');
@@ -198,6 +201,7 @@ export async function runHybridBatch(
     ? { ...capabilities.confirm, scope: 'dialog' as const, preferLast: true }
     : { role: 'button', names: confirmLabels, scope: 'dialog' as const, preferLast: true };
 
+  options.onPhase?.('select', 'buscando el botón Seleccionar');
   const selectStartedAt = Date.now();
   const selected = await activateSelectMode(page, selectLabels, capabilities.select);
   timings.selectModeMs = Date.now() - selectStartedAt;
@@ -226,7 +230,7 @@ export async function runHybridBatch(
       await page.goto(activityUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDomReady(page);
       await waitForPageIdle(page, 2_000, 300);
-      if (!(await activateSelectMode(page, selectLabels))) {
+      if (!(await activateSelectMode(page, selectLabels, capabilities.select))) {
         throw new Error('The list did not enter selection mode after reloading.', {
           cause: error,
         });
@@ -282,6 +286,7 @@ export async function runHybridBatch(
     });
   }
 
+  options.onPhase?.('delete', `eliminando ${clicked} seleccionado(s)`);
   await respectBanGuard();
 
   await governor.wait();
@@ -308,7 +313,13 @@ export async function runHybridBatch(
     );
   }
   if (!acted) {
-    throw new Error('The cleanup action control was not found.');
+    await sleep(600);
+    const retriedByMouse = await clickWithMouse(page, actionLabels);
+    if (!retriedByMouse) {
+      throw new Error(
+        'The cleanup action control was not found after selecting items. Instagram may have hidden the toolbar; retrying the batch.',
+      );
+    }
   }
   await debugState('after-action');
 
@@ -427,6 +438,7 @@ export async function runHybridBatch(
     ledger.mark(id, 'processed');
   }
   governor.recordSuccess();
+  options.onPhase?.('done', 'lote completado', `${clicked} procesado(s)`);
 
   logger.debug(
     `[hybrid] timings goto=${timings.gotoMs ?? 0}ms list=${timings.listWaitMs ?? 0}ms select=${timings.selectModeMs ?? 0}ms selection=${timings.selectionMs ?? 0}ms action=${timings.actionMs ?? 0}ms confirm=${timings.confirmMs ?? 0}ms mutation=${timings.mutationMs ?? 0}ms`,
