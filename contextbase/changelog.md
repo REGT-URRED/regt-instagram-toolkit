@@ -5,6 +5,7 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] [commit] b122f97 feat: replace per-batch cap with a total goal and derived batch sizes
 - [2026-11-19] feat: el menu ya no pide "maximo por lote": ahora pide la META TOTAL a eliminar (ej. 1000). El tamaño de cada lote se calcula con ceil(restantes/4), acotado a 20..95 en likes y 20..60 en comentarios, y el ultimo lote se recorta para llegar exacto a la meta.
 - [2026-11-19] feat: nuevo flag --goal en el CLI (likes clasico e hibrido de comentarios) con progreso "acumulado X/meta" y cierre por meta alcanzada en vez de por limite.
 - [2026-11-19] qa: autotest de formulas con la meta exacta: 1000 -> 23 lotes (15-95), 100 -> 5 lotes, 20 -> 1 lote, 5 -> 1 lote; verificado en produccion con meta 3 (3 likes eliminados, toast + HTTP 200 liked_unlike).
