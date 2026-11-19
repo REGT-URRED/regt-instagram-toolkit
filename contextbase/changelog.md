@@ -5,6 +5,9 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] fix: batch-size tope subido de 99 a 100 para que máximo 100 no falle al parsear --batch-size 20:100
+- [2026-11-19] [commit] f646b1a fix: batch-size tope 100 para no fallar con máximo 100
+- [2026-11-19] [commit] 8b863af chore: actualizar changelog
 - [2026-11-19] fix: emojis Shruggie siempre visibles en terminal (no dependen de isTTY); selector de navegador de una sola letra con enter automático (a=auto, b=brave, c=chrome, e=edge, o=opera, v=vivaldi)
 - [2026-11-19] [commit] c463a41 fix: emojis Shruggie siempre visibles + selector de navegador de una letra
 - [2026-11-19] [commit] ec85f11 chore: actualizar changelog con commits recientes
