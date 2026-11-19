@@ -91,7 +91,7 @@ function parseIntegerRange(
   return { min, max };
 }
 
-const batchSizeBounds = { min: 20, max: 99 } as const;
+const batchSizeBounds = { min: 20, max: 100 } as const;
 const clickDelayBounds = { min: 0, max: 60_000 } as const;
 const batchDelayBounds = { min: 0, max: 600_000 } as const;
 const confirmDelayBounds = { min: 0, max: 60_000 } as const;
