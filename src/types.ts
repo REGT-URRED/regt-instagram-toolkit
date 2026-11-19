@@ -59,6 +59,7 @@ export interface CliOptions {
   batchDelay: NumberRange;
   confirmDelay: NumberRange;
   limit?: number;
+  goal?: number;
   profileDir?: string;
   profileName?: string;
   chromeExecutablePath?: string;
@@ -93,6 +94,7 @@ export interface CleanupOptions {
   toastTimeoutMs: number;
   errorDialogTimeoutMs: number;
   limit?: number;
+  goal?: number;
   dryRun: boolean;
   onPhase?: ProgressHandler;
 }

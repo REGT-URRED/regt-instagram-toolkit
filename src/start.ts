@@ -86,15 +86,24 @@ async function main(): Promise<void> {
 
   let args: string[] = [];
   if (choice === '1' || choice === '2') {
-    const answer = (await readLine('  ¿Máximo por lote? [20] (lotes aleatorios): ')).trim();
+    console.log('  Meta total a eliminar. El tamaño de cada lote se calcula solo');
+    console.log('  (hasta 95 por lote en likes y 60 en comentarios) hasta llegar a la meta.');
+    const answer = (await readLine('  ¿Cuántos querés eliminar en total? [20]: ')).trim();
     const requested = Math.max(1, Number(answer) || 20);
 
     if (choice === '1') {
-      const maxBatch = Math.min(95, Math.max(20, requested));
-      args = ['--likes', '--batch-size', `20:${maxBatch}`];
+      args = ['--likes', '--goal', String(requested), '--batch-size', '20:95'];
     } else {
-      const maxBatch = Math.min(60, Math.max(1, requested));
-      args = ['--hybrid', '--comments', '--limit', String(maxBatch), '--hybrid-passes', '0'];
+      args = [
+        '--hybrid',
+        '--comments',
+        '--goal',
+        String(requested),
+        '--limit',
+        '60',
+        '--hybrid-passes',
+        '0',
+      ];
     }
   } else {
     args = ['--block-accounts'];

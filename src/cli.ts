@@ -53,6 +53,9 @@ function logRunConfiguration(options: CliOptions): void {
   logger.debug(`Modes: ${options.modes.join(', ')}`);
   logger.debug(`Period: ${formatRange(options.range)}`);
   logger.debug(`Batch size: ${options.batchSize.min}:${options.batchSize.max} items`);
+  if (options.goal !== undefined) {
+    logger.debug(`Goal: ${options.goal} item(s) this run`);
+  }
   logger.debug(`Click delay: ${options.clickDelay.min}:${options.clickDelay.max} ms`);
   logger.debug(`Batch delay: ${options.batchDelay.min}:${options.batchDelay.max} ms`);
   logger.debug(`Recover on error: ${options.recoverOnError ? 'enabled' : 'disabled'}`);
@@ -86,6 +89,10 @@ function buildCleanupOptions(options: CliOptions): CleanupOptions {
 
   if (options.limit !== undefined) {
     cleanupOptions.limit = options.limit;
+  }
+
+  if (options.goal !== undefined) {
+    cleanupOptions.goal = options.goal;
   }
 
   return cleanupOptions;
@@ -333,7 +340,8 @@ async function main(): Promise<void> {
       const hardCap = hybridMode === 'comments' ? 60 : 95;
       const maxBatch = Math.min(options.limit ?? hardCap, hardCap);
       const minBatch = Math.min(20, maxBatch);
-      const passLimit = maxPasses === 0 ? 50 : maxPasses;
+      const goal = options.goal;
+      const passLimit = goal !== undefined ? 100 : maxPasses === 0 ? 50 : maxPasses;
       let batchCeiling = maxBatch;
       let processed = 0;
       let lastResult: Awaited<ReturnType<typeof runHybridBatch>> | null = null;
@@ -341,11 +349,29 @@ async function main(): Promise<void> {
       let failures = 0;
 
       while (pass < passLimit) {
+        const remaining = goal === undefined ? undefined : Math.max(0, goal - processed);
+        if (remaining !== undefined && remaining <= 0) {
+          break;
+        }
+
         pass += 1;
-        const batchSize =
-          minBatch + Math.floor(Math.random() * Math.max(1, batchCeiling - minBatch + 1));
+        // Batches aim for roughly four passes to reach the goal, clamped to the
+        // per-mode hard cap (60 comments / 95 likes) and to what is left.
+        const goalCeiling =
+          remaining === undefined
+            ? batchCeiling
+            : Math.min(batchCeiling, Math.max(minBatch, Math.ceil(remaining / 4)));
+        const randomSize =
+          minBatch + Math.floor(Math.random() * Math.max(1, goalCeiling - minBatch + 1));
+        const batchSize = Math.max(
+          1,
+          Math.min(remaining ?? Number.MAX_SAFE_INTEGER, randomSize),
+        );
         const progress = new ShruggieProgress();
-        progress.start('iniciando lote', `lote ${batchSize} · acumulado ${processed}`);
+        progress.start(
+          'iniciando lote',
+          `lote ${batchSize}${goal !== undefined ? ` · meta ${goal} · restantes ${remaining}` : ` · acumulado ${processed}`}`,
+        );
         try {
           const result = await runHybridBatch(page, translations, capabilities, {
             mode: hybridMode,
@@ -377,6 +403,9 @@ async function main(): Promise<void> {
           logger.debug(`Hybrid pass raw ${JSON.stringify(result)}`);
           failures = 0;
           if (options.dryRun || result.processed === 0) {
+            break;
+          }
+          if (goal !== undefined && processed >= goal) {
             break;
           }
         } catch (error) {

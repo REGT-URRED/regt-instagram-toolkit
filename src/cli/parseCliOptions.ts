@@ -25,6 +25,7 @@ interface RawArguments {
   confirmDelay: string;
   clickDelay: string;
   limit?: number;
+  goal?: number;
   profileDir?: string;
   profileName?: string;
   chromeExecutable?: string;
@@ -164,6 +165,9 @@ function buildCliOptions(rootDirectory: string, argv: RawArguments): CliOptions 
   if (argv.limit !== undefined) {
     options.limit = argv.limit;
   }
+  if (argv.goal !== undefined) {
+    options.goal = Math.max(1, Math.floor(argv.goal));
+  }
   if (argv.profileDir !== undefined) {
     options.profileDir = argv.profileDir;
   }
@@ -271,6 +275,11 @@ export function parseCliOptions(rootDirectory: string): CliOptions {
     .option('limit', {
       type: 'number',
       describe: 'Maximum number of items to process during this run.',
+    })
+    .option('goal', {
+      type: 'number',
+      describe:
+        'Total number of items to remove in this run. Batch sizes are derived from the remaining goal and capped at 95 for likes and 60 for comments.',
     })
     .option('profile-dir', {
       type: 'string',

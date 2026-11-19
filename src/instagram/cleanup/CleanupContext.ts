@@ -44,7 +44,26 @@ export class CleanupContext {
 
   public pickBatchSize(): number {
     const { min, max } = this.options.batchSize;
-    const size = min + Math.floor(Math.random() * (max - min + 1));
+    const goal = this.options.goal;
+    const remaining = goal === undefined ? undefined : Math.max(0, goal - this.totalProcessed);
+
+    if (remaining === 0) {
+      return 1;
+    }
+
+    const minimum = remaining === undefined ? min : Math.max(1, Math.min(min, remaining));
+    // Batches aim for roughly four passes to reach the goal. The result is
+    // clamped to the configured ceiling (95 for likes, 60 for comments), so a
+    // goal of 1000 still runs in batches of at most 95.
+    const ceiling =
+      remaining === undefined
+        ? max
+        : Math.max(minimum, Math.min(max, Math.ceil(remaining / 4)));
+    const size = minimum + Math.floor(Math.random() * Math.max(1, ceiling - minimum + 1));
+
+    if (remaining !== undefined) {
+      return Math.max(1, Math.min(size, remaining));
+    }
 
     if (this.options.limit === undefined) {
       return size;
@@ -54,7 +73,22 @@ export class CleanupContext {
   }
 
   public get hasReachedLimit(): boolean {
-    return Boolean(this.options.limit && this.totalProcessed >= this.options.limit);
+    const goalReached =
+      this.options.goal !== undefined && this.totalProcessed >= this.options.goal;
+    const limitReached = Boolean(
+      this.options.limit && this.totalProcessed >= this.options.limit,
+    );
+
+    return goalReached || limitReached;
+  }
+
+  public get goalDescription(): string | null {
+    if (this.options.goal === undefined) {
+      return null;
+    }
+
+    const remaining = Math.max(0, this.options.goal - this.totalProcessed);
+    return `meta ${this.options.goal} · restantes ${remaining}`;
   }
 
   public setSelection(selection: SelectionResult): void {
@@ -147,7 +181,11 @@ export class CleanupContext {
   }
 
   public notifyPhase(phase: ProgressPhase, message: string, details?: string): void {
-    this.options.onPhase?.(phase, message, details ?? `acumulado ${this.totalProcessed}`);
+    const progress =
+      this.options.goal === undefined
+        ? `acumulado ${this.totalProcessed}`
+        : `acumulado ${this.totalProcessed}/${this.options.goal}`;
+    this.options.onPhase?.(phase, message, details ?? progress);
   }
 
   public debug(message: string): void {

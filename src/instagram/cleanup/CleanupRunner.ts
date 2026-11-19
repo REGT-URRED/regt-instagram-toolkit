@@ -32,7 +32,12 @@ export class CleanupRunner {
   public async run(): Promise<number> {
     while (true) {
       if (this.context.hasReachedLimit) {
-        this.context.info(`Limit reached: ${this.context.options.limit}`);
+        const goal = this.context.options.goal;
+        this.context.info(
+          goal !== undefined
+            ? `Goal reached: ${this.context.totalProcessed}/${goal} item(s).`
+            : `Limit reached: ${this.context.options.limit}`,
+        );
         break;
       }
 

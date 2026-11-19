@@ -5,6 +5,10 @@ Registro metódico del progreso técnico, decisiones de arquitectura y evolució
 ---
 
 ## Cambios Realizados
+- [2026-11-19] feat: el menu ya no pide "maximo por lote": ahora pide la META TOTAL a eliminar (ej. 1000). El tamaño de cada lote se calcula con ceil(restantes/4), acotado a 20..95 en likes y 20..60 en comentarios, y el ultimo lote se recorta para llegar exacto a la meta.
+- [2026-11-19] feat: nuevo flag --goal en el CLI (likes clasico e hibrido de comentarios) con progreso "acumulado X/meta" y cierre por meta alcanzada en vez de por limite.
+- [2026-11-19] qa: autotest de formulas con la meta exacta: 1000 -> 23 lotes (15-95), 100 -> 5 lotes, 20 -> 1 lote, 5 -> 1 lote; verificado en produccion con meta 3 (3 likes eliminados, toast + HTTP 200 liked_unlike).
+- [2026-11-19] [commit] 3406a89 chore: registrar commit en contextbase
 - [2026-11-19] [commit] 18dc77f chore: registrar resultado de la limpieza de likes en contextbase
 - [2026-11-19] Limpieza de likes reparada y verificada en produccion. Causas raiz: (1) NetworkVerifier aplicaba el blocklist ('events', 'logging', etc.) sobre el cuerpo del request y todo payload de Instagram contiene 'events', por lo que descartaba TODAS las peticiones validas; ahora solo mira la URL y detecta appid liked_unlike/unlike. (2) Instagram cambio el toast a 'Indicaste que no te gustan N publicaciones'; se agregaron variantes es/en/fr. (3) El boton de accion y la confirmacion ahora usan mouse real (CDP) porque el activity center ignora element.click(); la confirmacion es opcional pero obligatoria si el dialogo aparece. (4) Un lote sin toast ni respuesta de red ya no se cuenta como exitoso. Se agrego RecoveryPolicy (buen camino / mal camino) con clasificacion y limites por tipo de fallo: action-button-missing, confirmation-missing, instagram-error-dialog, unacknowledged-batch, items-still-visible, navigation-lost. Verificado con Brave del sistema: 40 likes eliminados en dos lotes de 20 y 5 mas en corrida final, todos confirmados por toast y HTTP 200 liked_unlike. Commit 8b07e1b.
 - [2026-11-19] [commit] 2626fde chore: registrar commit en contextbase
